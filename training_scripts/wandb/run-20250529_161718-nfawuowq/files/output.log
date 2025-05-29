@@ -1,0 +1,40 @@
+  0%|                                                                                                                                                                       | 3/215022 [00:24<486:38:17,  8.15s/it]
+Traceback (most recent call last):
+  File "/home/ubuntu/MSA_Pairformer/training_scripts/train_model_05292025.py", line 390, in <module>
+    main()
+  File "/home/ubuntu/MSA_Pairformer/training_scripts/train_model_05292025.py", line 219, in main
+    result = model(
+  File "/usr/lib/python3/dist-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/usr/lib/python3/dist-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/usr/lib/python3/dist-packages/torch/_dynamo/eval_frame.py", line 465, in _fn
+    return fn(*args, **kwargs)
+  File "/usr/lib/python3/dist-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/usr/lib/python3/dist-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/ubuntu/MSA_Pairformer/MSAPairformer/modules.py", line 352, in forward
+    pairwise_repr = self.relative_position_encoding(token_indices=token_indices)
+  File "/home/ubuntu/MSA_Pairformer/MSAPairformer/modules.py", line 362, in torch_dynamo_resume_in_forward_at_352
+    msa, pairwise_repr, seq_weights_list, attn_gates_list, attn_weights_list = self.msa_module(
+  File "/usr/lib/python3/dist-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/usr/lib/python3/dist-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/ubuntu/MSA_Pairformer/MSAPairformer/modules.py", line 165, in forward
+    for (
+ValueError: not enough values to unpack (expected 4, got 3)
+Exception ignored in atexit callback: <function _MultiProcessingDataLoaderIter._clean_up_worker at 0xed8808775120>
+Traceback (most recent call last):
+  File "/usr/lib/python3/dist-packages/torch/utils/data/dataloader.py", line 1598, in _clean_up_worker
+    w.join(timeout=_utils.MP_STATUS_CHECK_INTERVAL)
+  File "/usr/lib/python3.10/multiprocessing/process.py", line 149, in join
+    res = self._popen.wait(timeout)
+  File "/usr/lib/python3.10/multiprocessing/popen_fork.py", line 40, in wait
+    if not wait([self.sentinel], timeout):
+  File "/usr/lib/python3.10/multiprocessing/connection.py", line 931, in wait
+    ready = selector.select(timeout)
+  File "/usr/lib/python3.10/selectors.py", line 416, in select
+    fd_event_list = self._selector.poll(timeout)
+KeyboardInterrupt:

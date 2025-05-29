@@ -1,0 +1,23 @@
+2025-05-29 16:14:55,137 INFO    MainThread:2382782 [wandb_setup.py:_flush():68] Current SDK version is 0.19.6
+2025-05-29 16:14:55,137 INFO    MainThread:2382782 [wandb_setup.py:_flush():68] Configure stats pid to 2382782
+2025-05-29 16:14:55,137 INFO    MainThread:2382782 [wandb_setup.py:_flush():68] Loading settings from /home/ubuntu/.config/wandb/settings
+2025-05-29 16:14:55,137 INFO    MainThread:2382782 [wandb_setup.py:_flush():68] Loading settings from /home/ubuntu/MSA_Pairformer/training_scripts/wandb/settings
+2025-05-29 16:14:55,137 INFO    MainThread:2382782 [wandb_setup.py:_flush():68] Loading settings from environment variables
+2025-05-29 16:14:55,137 INFO    MainThread:2382782 [wandb_init.py:setup_run_log_directory():637] Logging user logs to /home/ubuntu/MSA_Pairformer/training_scripts/wandb/run-20250529_161455-cc43s6b5/logs/debug.log
+2025-05-29 16:14:55,137 INFO    MainThread:2382782 [wandb_init.py:setup_run_log_directory():638] Logging internal logs to /home/ubuntu/MSA_Pairformer/training_scripts/wandb/run-20250529_161455-cc43s6b5/logs/debug-internal.log
+2025-05-29 16:14:55,137 INFO    MainThread:2382782 [wandb_init.py:init():756] calling init triggers
+2025-05-29 16:14:55,137 INFO    MainThread:2382782 [wandb_init.py:init():761] wandb.init called with sweep_config: {}
+config: {'max_seq_length': 320, 'max_msa_depth': 320, 'min_msa_depth': 128, 'effective_batch_size': 32, 'gradient_accumulation_every': 32, 'dim_msa_input': 28, 'dim_pairwise': 256, 'dim_msa': 464, 'dim_logits': 26, 'msa_module_kwargs': {'depth': 22, 'opm_kwargs': {'dim_opm_hidden': 16, 'outer_product_flavor': 'presoftmax_differential_attention', 'seq_attn': True, 'dim_qk': 128, 'chunk_size': None, 'return_seq_weights': True, 'return_attn_logits': False, 'eps': 1e-09}, 'pwa_kwargs': {'heads': 8, 'dim_head': 32, 'dropout': 0.0, 'dropout_type': 'row'}, 'pairwise_block_kwargs': {'tri_mult_dim_hidden': None, 'use_triangle_attn': False, 'use_triangle_updates': True}}, 'basic_relative_position_encoding_kwargs': {'r_max': 32}, 'use_basic_relative_position_encoding': True, 'return_msa_repr': False, 'return_pairwise_repr': False, 'query_only': True, 'n_append_random_seqs': 0, 'n_append_random_seqs_val_test': 0, 'qk_norm': False, 'weight_decay': 0.01, 'lr': 5e-05, 'lr_warmup_steps': 500, 'lr_min': 5e-10, 'lr_decay_steps': 49500, 'betas': (0.9, 0.999), '_wandb': {}}
+2025-05-29 16:14:55,137 INFO    MainThread:2382782 [wandb_init.py:init():789] starting backend
+2025-05-29 16:14:55,342 INFO    MainThread:2382782 [wandb_init.py:init():793] sending inform_init request
+2025-05-29 16:14:55,345 INFO    MainThread:2382782 [backend.py:_multiprocessing_setup():97] multiprocessing start_methods=fork,spawn,forkserver, using: spawn
+2025-05-29 16:14:55,345 INFO    MainThread:2382782 [wandb_init.py:init():808] backend started and connected
+2025-05-29 16:14:55,346 INFO    MainThread:2382782 [wandb_init.py:init():901] updated telemetry
+2025-05-29 16:14:55,349 INFO    MainThread:2382782 [wandb_init.py:init():936] communicating run to backend with 90.0 second timeout
+2025-05-29 16:14:55,630 INFO    MainThread:2382782 [wandb_init.py:init():994] starting run threads in backend
+2025-05-29 16:14:55,745 INFO    MainThread:2382782 [wandb_run.py:_console_start():2385] atexit reg
+2025-05-29 16:14:55,745 INFO    MainThread:2382782 [wandb_run.py:_redirect():2235] redirect: wrap_raw
+2025-05-29 16:14:55,745 INFO    MainThread:2382782 [wandb_run.py:_redirect():2300] Wrapping output streams.
+2025-05-29 16:14:55,745 INFO    MainThread:2382782 [wandb_run.py:_redirect():2325] Redirects installed.
+2025-05-29 16:14:55,747 INFO    MainThread:2382782 [wandb_init.py:init():1036] run started, returning control to user process
+2025-05-29 16:16:27,652 WARNING MsgRouterThr:2382782 [router.py:message_loop():75] message_loop has been closed

@@ -1,0 +1,42 @@
+{
+  "os":  "Linux-6.8.0-1013-nvidia-64k-aarch64-with-glibc2.35",
+  "python":  "CPython 3.10.12",
+  "startedAt":  "2025-05-29T16:07:31.022752Z",
+  "program":  "/home/ubuntu/MSA_Pairformer/training_scripts/train_model_05292025.py",
+  "codePath":  "training_scripts/train_model_05292025.py",
+  "git":  {
+    "remote":  "git@github.com:yoakiyama/MSA_Pairformer.git",
+    "commit":  "c257bd4b0df201fbea37e8c8d66f2928f15580cd"
+  },
+  "email":  "yo_aki@mit.edu",
+  "root":  "/home/ubuntu/MSA_Pairformer/training_scripts",
+  "host":  "192-222-56-115",
+  "executable":  "/usr/bin/python3",
+  "codePathLocal":  "train_model_05292025.py",
+  "cpu_count":  64,
+  "cpu_count_logical":  64,
+  "gpu":  "NVIDIA GH200 480GB",
+  "gpu_count":  1,
+  "disk":  {
+    "/":  {
+      "total":  "4261618229248",
+      "used":  "1801105006592"
+    }
+  },
+  "memory":  {
+    "total":  "564442955776"
+  },
+  "cpu":  {
+    "count":  64,
+    "countLogical":  64
+  },
+  "gpu_nvidia":  [
+    {
+      "name":  "NVIDIA GH200 480GB",
+      "memoryTotal":  "102625181696",
+      "cudaCores":  16896,
+      "architecture":  "Hopper"
+    }
+  ],
+  "cudaVersion":  "12.4"
+}

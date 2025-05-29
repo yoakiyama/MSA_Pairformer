@@ -1,0 +1,93 @@
+_wandb:
+    value:
+        cli_version: 0.19.6
+        m: []
+        python_version: 3.10.12
+        t:
+            "1":
+                - 1
+                - 55
+            "2":
+                - 1
+                - 55
+            "3":
+                - 13
+                - 16
+                - 23
+                - 55
+            "4": 3.10.12
+            "5": 0.19.6
+            "8":
+                - 5
+            "12": 0.19.6
+            "13": linux-aarch64
+basic_relative_position_encoding_kwargs:
+    value:
+        r_max: 32
+betas:
+    value:
+        - 0.9
+        - 0.999
+dim_logits:
+    value: 26
+dim_msa:
+    value: 464
+dim_msa_input:
+    value: 28
+dim_pairwise:
+    value: 256
+effective_batch_size:
+    value: 32
+gradient_accumulation_every:
+    value: 32
+lr:
+    value: 5e-05
+lr_decay_steps:
+    value: 49500
+lr_min:
+    value: 5e-10
+lr_warmup_steps:
+    value: 500
+max_msa_depth:
+    value: 320
+max_seq_length:
+    value: 320
+min_msa_depth:
+    value: 128
+msa_module_kwargs:
+    value:
+        depth: 22
+        opm_kwargs:
+            chunk_size: null
+            dim_opm_hidden: 16
+            dim_qk: 128
+            eps: 1e-09
+            outer_product_flavor: presoftmax_differential_attention
+            return_attn_logits: false
+            return_seq_weights: true
+            seq_attn: true
+        pairwise_block_kwargs:
+            tri_mult_dim_hidden: null
+            use_triangle_attn: false
+            use_triangle_updates: true
+        pwa_kwargs:
+            dim_head: 32
+            dropout: 0
+            dropout_type: row
+            heads: 8
+n_append_random_seqs:
+    value: 0
+n_append_random_seqs_val_test:
+    value: 0
+qk_norm:
+    value: false
+query_only:
+    value: true
+return_msa_repr:
+    value: false
+return_pairwise_repr:
+    value: false
+use_basic_relative_position_encoding:
+    value: true
+weight_decay:
+    value: 0.01

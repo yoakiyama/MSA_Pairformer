@@ -1,0 +1,15 @@
+{"time":"2025-05-29T16:20:14.928497444Z","level":"INFO","msg":"stream: starting","core version":"0.19.6","symlink path":"/home/ubuntu/MSA_Pairformer/training_scripts/wandb/run-20250529_162014-dxw6mqh0/logs/debug-core.log"}
+{"time":"2025-05-29T16:20:15.03161792Z","level":"INFO","msg":"created new stream","id":"dxw6mqh0"}
+{"time":"2025-05-29T16:20:15.031696064Z","level":"INFO","msg":"stream: started","id":"dxw6mqh0"}
+{"time":"2025-05-29T16:20:15.031710369Z","level":"INFO","msg":"writer: Do: started","stream_id":"dxw6mqh0"}
+{"time":"2025-05-29T16:20:15.031745153Z","level":"INFO","msg":"sender: started","stream_id":"dxw6mqh0"}
+{"time":"2025-05-29T16:20:15.031751009Z","level":"INFO","msg":"handler: started","stream_id":"dxw6mqh0"}
+{"time":"2025-05-29T16:20:15.158141757Z","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-05-29T16:20:49.807800993Z","level":"INFO","msg":"stream: closing","id":"dxw6mqh0"}
+{"time":"2025-05-29T16:20:49.807832769Z","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-05-29T16:20:49.808407272Z","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-05-29T16:20:50.215639227Z","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-05-29T16:20:50.314404617Z","level":"INFO","msg":"handler: closed","stream_id":"dxw6mqh0"}
+{"time":"2025-05-29T16:20:50.314421066Z","level":"INFO","msg":"writer: Close: closed","stream_id":"dxw6mqh0"}
+{"time":"2025-05-29T16:20:50.314437418Z","level":"INFO","msg":"sender: closed","stream_id":"dxw6mqh0"}
+{"time":"2025-05-29T16:20:50.314508267Z","level":"INFO","msg":"stream: closed","id":"dxw6mqh0"}

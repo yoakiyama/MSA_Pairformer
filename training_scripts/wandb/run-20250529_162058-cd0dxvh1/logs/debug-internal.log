@@ -1,0 +1,7 @@
+{"time":"2025-05-29T16:20:58.283191371Z","level":"INFO","msg":"stream: starting","core version":"0.19.6","symlink path":"/home/ubuntu/MSA_Pairformer/training_scripts/wandb/run-20250529_162058-cd0dxvh1/logs/debug-core.log"}
+{"time":"2025-05-29T16:20:58.386192399Z","level":"INFO","msg":"created new stream","id":"cd0dxvh1"}
+{"time":"2025-05-29T16:20:58.386223695Z","level":"INFO","msg":"stream: started","id":"cd0dxvh1"}
+{"time":"2025-05-29T16:20:58.386249104Z","level":"INFO","msg":"writer: Do: started","stream_id":"cd0dxvh1"}
+{"time":"2025-05-29T16:20:58.386284112Z","level":"INFO","msg":"sender: started","stream_id":"cd0dxvh1"}
+{"time":"2025-05-29T16:20:58.38625128Z","level":"INFO","msg":"handler: started","stream_id":"cd0dxvh1"}
+{"time":"2025-05-29T16:20:58.556373655Z","level":"INFO","msg":"Starting system monitor"}
