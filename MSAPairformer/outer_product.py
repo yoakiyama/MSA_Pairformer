@@ -599,7 +599,7 @@ class PresoftmaxDifferentialOuterProductMean(Module):
             # Compute softmax attention weights
             seq_weights = seq_weights.masked_fill(~msa_mask, -1e9)
             seq_weights = seq_weights.softmax(dim=-1)
-            del lambda_1, lambda_2, lambda_full, q, k
+            # del lambda_1, lambda_2, lambda_full, q, k
         else:
             # Default to uniform sequence weights
             if not exists(seq_weights):
@@ -626,7 +626,7 @@ class PresoftmaxDifferentialOuterProductMean(Module):
             pairwise_mask = to_pairwise_mask(mask)
         outer = torch.einsum("... i j d, ... i j -> ... i j d", outer, pairwise_mask)
         if not self.return_seq_weights:
-            del seq_weights
+            # del seq_weights
             seq_weights = None
         return outer, seq_weights, None
 

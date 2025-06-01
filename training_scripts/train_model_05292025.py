@@ -88,7 +88,7 @@ def main():
     # Optimizer and LR scheduler
     total_steps = 50000
     weight_decay = 0.01
-    lr = 5e-5
+    lr = 5e-4
     lr_warmup_steps = 500
     lr_min = lr * 1e-5
     lr_decay_steps = total_steps - lr_warmup_steps
@@ -115,16 +115,16 @@ def main():
     # Data parameters
     data_params = dict(
         msa_file_paths = msa_file_paths,
-        max_seq_length = 320,
+        max_seq_length = 256,
         max_seq_length_val_test = 512,
-        max_msa_depth = 320,
+        max_msa_depth = 512,
         max_msa_depth_val_test = 512,
-        min_msa_depth = 128,
+        min_msa_depth = 1,
         min_msa_depth_val_test = 256,
         max_tokens = 196608,
         max_tokens_val_test = 196608,
         batch_size = 1,
-        batch_size_val_test = 8,
+        batch_size_val_test = 4,
         num_workers = 18,
         train_prop = 0.8,
         val_size = 100,
@@ -312,11 +312,12 @@ def main():
                     loss_tracker.update_multiple(val_update_stat_d)
                     # Compute lambda (differential scaling) for each layer
                     lambda_d = {}
-                    for idx, layer in enumerate(model.msa_module.layers):
-                        lambda_1 = torch.exp(torch.sum(layer[2].opm.lambda_q1 * layer[2].opm.lambda_k1, dim=-1)).to(torch.float32)
-                        lambda_2 = torch.exp(torch.sum(layer[2].opm.lambda_q2 * layer[2].opm.lambda_k2, dim=-1)).to(torch.float32)
-                        lambda_full = lambda_1 - lambda_2 + layer[2].opm.lambda_init
-                        lambda_d[f"layer_{idx}_lambda"] = lambda_full
+                    with torch.no_grad():
+                        for idx, layer in enumerate(model.msa_module.layers):
+                            lambda_1 = torch.exp(torch.sum(layer[2].opm.lambda_q1 * layer[2].opm.lambda_k1, dim=-1)).to(torch.float32)
+                            lambda_2 = torch.exp(torch.sum(layer[2].opm.lambda_q2 * layer[2].opm.lambda_k2, dim=-1)).to(torch.float32)
+                            lambda_full = lambda_1 - lambda_2 + layer[2].opm.lambda_init
+                            lambda_d[f"layer_{idx}_lambda"] = lambda_full
                     # Log validation loss, accuracy, and perplexity
                     log_d = {**{k: v for k, v in loss_tracker.get_all().items() if 'val_' in k}, **lambda_d}
                     wandb.log(log_d)

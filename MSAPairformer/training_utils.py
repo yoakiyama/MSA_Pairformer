@@ -156,7 +156,8 @@ def init_dataloaders(
         n_append_random = n_append_random,
         shifted_random = shifted_random,
         scramble_seq_perc = scramble_seq_perc_train,
-        scramble_col_perc = scramble_col_perc_train
+        scramble_col_perc = scramble_col_perc_train,
+        random_depth = random_depth
     )
     val_msa_dataset = MSADataset(
         msa_dir = None,

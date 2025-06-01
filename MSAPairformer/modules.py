@@ -177,7 +177,7 @@ class CustomMSAModule(Module):
                 attn_gates_list_d[f"layer_{layer_idx}"] = attn_gates
             if self.return_attn_weights and exists(attn_weights):
                 attn_weights_list_d[f"layer_{layer_idx}"] = attn_weights
-            del attn_gates, msa_residual
+            # del attn_gates, msa_residual
             msa = msa + msa_transition(msa)
 
             # Compute outer product mean (with residual connection)
@@ -185,7 +185,7 @@ class CustomMSAModule(Module):
             if self.return_seq_weights:
                 seq_weights_list_d[f"layer_{layer_idx}"] = norm_weights
             pairwise_repr = pairwise_repr + update_pairwise_repr
-            del update_pairwise_repr
+            # del update_pairwise_repr
 
             # Pairwise representation block (# Debug: make sure we haven't already normalized the pairwise repr)
             if pairwise_block is not None:
