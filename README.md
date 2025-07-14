@@ -4,9 +4,9 @@
 
 - [MSA Pairformer](#MSA-Pairformer)
   - [Installation ](#installation-)
-  - [ESM 3  ](#esm-3--)
-    - [Quickstart for ESM3-open ](#quickstart-for-esm3-open-)
-    - [ESM3 Example Usage](#esm3-example-usage)
+  - [MSA Pairformer](#MSA-Pairformer--)
+    - [Quickstart ](#quickstart--)
+    - [Example Usage](#example-usage--)
   - [Licenses  ](#licenses--)
   - [Citations  ](#citations--)
 
@@ -17,7 +17,7 @@ This repository contains the latest release of MSA Pairformer and Google Colab n
 To get started with MSA Pairformer, install the python library using pip:
 
 ```bash
-pip install esm
+pip install msa-pairformer
 ```
 
 or download this Github repository and install manually
