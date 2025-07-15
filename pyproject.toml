@@ -16,7 +16,7 @@ maintainers = [
 
 dependencies = [
     "torch>=2.5.0",
-    "numpy>=1.23,<2.0",
+    "numpy>=2.0",
     "einops>=0.8.0",
     "einx>=0.3.0",
     "jaxtyping>=0.2.38",
