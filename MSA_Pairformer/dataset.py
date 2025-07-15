@@ -142,7 +142,6 @@ class MSA:
         },
         hhfilter_kwargs: dict = {}
     ):
-        self.uniprot_id = msa_file_path.split('/')[-3]
         self.msa_file_path = msa_file_path
         self.pdb_file_path = pdb_file_path
         self.max_length = max_length
@@ -354,11 +353,12 @@ class MSA:
         tmpdir_base = os.environ.get("TMPDIR", "/tmp/")
         with tempfile.TemporaryDirectory(dir=tmpdir_base) as tmpdirname:
             tmpdir = Path(tmpdirname)
-            fasta_file = tmpdir / f"{self.uniprot_id}.input.fasta"
+            random_prefix = ''.join(np.random.choice(list('abcdefghijklmnopqrstuvwxyz0123456789'), size=8))
+            fasta_file = tmpdir / f"{random_prefix}.input.fasta"
             fasta_file.write_text(
                 "\n".join([f">{i}\n{''.join(seq)}" for i, seq in enumerate(msa_a)])
             )
-            output_file = tmpdir / f"{self.uniprot_id}.output.fasta"
+            output_file = tmpdir / f"{random_prefix}.output.fasta"
             command = " ".join(
                 [
                     f"{binary}",
