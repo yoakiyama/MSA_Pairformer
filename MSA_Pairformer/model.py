@@ -53,25 +53,12 @@ class CoreModule(Module):
             use_pair_updates = False # For ablation study
         ),
         drop_last_msa_update = False,
-        # return_all_pairwise_repr = False,
-        # return_pairwise_repr_layer_idx = 15,
-        # return_all_msa_repr = False,
-        # return_msa_repr_layer_idx = 22,
-        # return_repr_after_layer_idx = None,
     ):
         super().__init__()
 
         # Store parameters
         self.dim_pairwise = dim_pairwise
         self.depth = depth
-
-        # # Store return flags
-        # self.return_seq_weights = opm_kwargs['return_seq_weights'] if 'return_seq_weights' in opm_kwargs else False
-        # self.return_all_pair_repr = return_all_pairwise_repr
-        # self.return_pairwise_repr_layer_idx = return_pairwise_repr_layer_idx
-        # self.return_all_msa_repr = return_all_msa_repr
-        # self.return_msa_repr_layer_idx = return_msa_repr_layer_idx
-        # self.return_repr_after_layer_idx = return_repr_after_layer_idx
 
         # Automatically assign lambda init if not provided (for presoftmax differential attention)
         if ('lambda_init' not in opm_kwargs) or (opm_kwargs['lambda_init'] is None):
@@ -153,21 +140,6 @@ class CoreModule(Module):
                 if isinstance(module, OuterProduct):
                     module.opm.seq_attn = True
 
-    # def set_return_all_pairwise_repr(self, return_all_pairwise_repr: bool):
-    #     self.return_all_pairwise_repr = return_all_pairwise_repr
-
-    # def set_return_pairwise_repr_layer_idx(self, return_pairwise_repr_layer_idx: int):
-    #     self.return_pairwise_repr_layer_idx = return_pairwise_repr_layer_idx
-
-    # def set_return_all_msa_repr(self, return_all_msa_repr: bool):
-    #     self.return_all_msa_repr = return_all_msa_repr
-
-    # def set_return_msa_repr_layer_idx(self, return_msa_repr_layer_idx: int):
-    #     self.return_msa_repr_layer_idx = return_msa_repr_layer_idx
-    
-    # def set_return_repr_after_layer_idx(self, return_repr_after_layer_idx: int):
-    #     self.return_repr_after_layer_idx = return_repr_after_layer_idx
-
     def forward(
         self,
         msa: Float['b s n dm'],
@@ -245,8 +217,8 @@ class CoreModule(Module):
         
         # Organize results
         res = {}
-        res['msa_repr'] = msa[:, :1, :, :] if query_only else msa
-        res['pairwise_repr'] = pairwise_repr
+        res['final_msa_repr'] = msa[:, :1, :, :] if query_only else msa
+        res['final_pairwise_repr'] = pairwise_repr
         res['msa_repr_d'] = msa_repr_d
         res['pairwise_repr_d'] = pairwise_repr_d
         res['seq_weights_list_d'] = seq_weights_list_d
@@ -298,10 +270,6 @@ class MSAPairformer(Module):
                 use_triangle_updates = True,
                 use_pair_updates = False
             ),
-            # return_all_pairwise_repr = False,
-            # return_all_msa_repr = False,
-            # return_msa_repr_layer_idx = 22,
-            # return_repr_after_layer_idx = None
         ),
         relative_position_encoding_kwargs: dict = dict(
             r_max = 32, 
@@ -403,6 +371,7 @@ class MSAPairformer(Module):
         pairwise_mask: Bool['b n n'] | None = None,
         seq_weights: Float['b s'] | None = None,
         return_contacts: bool = True,
+        return_seq_weights: bool = False,
         query_only: bool = True,
         return_pairwise_repr_layer_idx: List[int] | int | None = None,
         return_msa_repr_layer_idx: List[int] | int | None = None,
@@ -430,14 +399,15 @@ class MSAPairformer(Module):
             seq_weights = seq_weights,
             query_only = query_only,
             return_msa_repr_layer_idx = return_msa_repr_layer_idx,
-            return_pairwise_repr_layer_idx = return_pairwise_repr_layer_idx
+            return_pairwise_repr_layer_idx = return_pairwise_repr_layer_idx,
+            return_seq_weights = return_seq_weights
         )
 
         # Get logits via language modeling head
         if query_only:
-            logits = self.lm_head(results['msa_repr'])
+            logits = self.lm_head(results['final_msa_repr'])
         else:
-            logits = self.lm_head(results['msa_repr'])
+            logits = self.lm_head(results['final_msa_repr'])
         results['logits'] = logits
 
         # Predict contacts
