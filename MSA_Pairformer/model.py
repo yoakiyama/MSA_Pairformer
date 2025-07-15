@@ -360,9 +360,9 @@ class MSAPairformer(Module):
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model = cls()
         path = Path(snapshot_download(repo_id="yakiyama/MSA-Pairformer", cache_dir=weights_dir))
-        checkpoint = torch.load(path / "model.bin", weights_only=True)
+        checkpoint = torch.load(path / "model.bin", weights_only=True, map_location=device)
         checkpoint = {k.replace("core_module", "core_stack"): v for k, v in checkpoint.items()}
-        contact_checkpoint = torch.load(path / "contact.bin", weights_only=True)
+        contact_checkpoint = torch.load(path / "contact.bin", weights_only=True, map_location=device)
         contact_checkpoint = {f"contact_head.{k}": v for k, v in contact_checkpoint.items()}
         checkpoint.update(contact_checkpoint)
         model.load_state_dict(checkpoint)
