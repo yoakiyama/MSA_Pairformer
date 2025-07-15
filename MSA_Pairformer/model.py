@@ -440,7 +440,8 @@ class MSAPairformer(Module):
             seq_weights = seq_weights,
             query_only = True,
             return_repr_after_layer_idx = self.contact_layer,
-            return_pairwise_repr_layer_idx = [self.contact_layer]
+            return_pairwise_repr_layer_idx = [self.contact_layer],
+            return_seq_weights = False,
         )
 
         # Predict contacts
