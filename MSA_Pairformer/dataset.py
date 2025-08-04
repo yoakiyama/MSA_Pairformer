@@ -634,13 +634,16 @@ def get_relative_positions(msa_input):
     token_indices = torch.arange(seq_len).unsqueeze(0).repeat(batch_size, 1)
     return token_indices
 
-def prepare_msa_masks(msa_input):
+def onehot_msa(msa_input, device=torch.device('cpu')):
+    return torch.nn.functional.one_hot(msa_input, num_classes=len(aa2tok_d)).to(device)
+
+def prepare_msa_masks(msa_input, device=torch.device('cpu')):
     # msa_input is of shape [b, s, n]
     mask = (msa_input != aa2tok_d['PAD']).any(dim=1) # [b, n]
     msa_mask = (msa_input != aa2tok_d['PAD']).any(dim=2) # [b, s]
     full_mask = (msa_input != aa2tok_d['PAD']) # [b, s, n]
     pairwise_mask = einx.logical_and("... i, ... j -> ... i j", mask, mask) # [b, n, n]
-    return mask, msa_mask, full_mask, pairwise_mask
+    return mask.to(device), msa_mask.to(device), full_mask.to(device), pairwise_mask.to(device)
 
 def prepare_inputs(batch, device):
     msa_repr = batch['msas_onehot'].float().to(device)

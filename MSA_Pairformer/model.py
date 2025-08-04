@@ -285,8 +285,9 @@ class MSAPairformer(Module):
         # Relative position encoding
         self.relative_position_encoding = RelativePositionEncoding(
             dim_out = dim_pairwise,
-            **relative_position_encoding_kwargs
+            **relative_position_encoding_kwargs,
         )
+        
         self.token_bond_to_pairwise_feat = Sequential(
             Rearrange('... -> ... 1'),
             LinearNoBias(1, dim_pairwise)
@@ -329,9 +330,7 @@ class MSAPairformer(Module):
         model = cls()
         path = Path(snapshot_download(repo_id="yakiyama/MSA-Pairformer", cache_dir=weights_dir))
         checkpoint = torch.load(path / "model.bin", weights_only=True, map_location=device)
-        checkpoint = {k.replace("core_module", "core_stack"): v for k, v in checkpoint.items()}
         contact_checkpoint = torch.load(path / "contact.bin", weights_only=True, map_location=device)
-        contact_checkpoint = {f"contact_head.{k}": v for k, v in contact_checkpoint.items()}
         checkpoint.update(contact_checkpoint)
         model.load_state_dict(checkpoint)
         model.to(device)
@@ -376,6 +375,7 @@ class MSAPairformer(Module):
         return_pairwise_repr_layer_idx: List[int] | int | None = None,
         return_msa_repr_layer_idx: List[int] | int | None = None,
         complex_chain_break_indices: List[int] | None = None,
+        return_repr_after_layer_idx: int | None = None,
     ):
         # Ensure that contact layer is in return_pairwise_repr_layer_idx if returning contacts
         if return_contacts:
@@ -398,9 +398,10 @@ class MSAPairformer(Module):
             pairwise_mask = pairwise_mask,
             seq_weights = seq_weights,
             query_only = query_only,
+            return_seq_weights = return_seq_weights,
             return_msa_repr_layer_idx = return_msa_repr_layer_idx,
             return_pairwise_repr_layer_idx = return_pairwise_repr_layer_idx,
-            return_seq_weights = return_seq_weights
+            return_repr_after_layer_idx = return_repr_after_layer_idx
         )
 
         # Get logits via language modeling head
@@ -426,6 +427,7 @@ class MSAPairformer(Module):
         pairwise_mask: Bool['b n n'] | None = None,
         seq_weights: Float['b s'] | None = None,
         complex_chain_break_indices: List[int] | None = None,
+        return_seq_weights: bool = False,
     ):
         # Initialize representations
         msa, pairwise_repr = self.init_representations(msa, complex_chain_break_indices)
@@ -441,7 +443,7 @@ class MSAPairformer(Module):
             query_only = True,
             return_repr_after_layer_idx = self.contact_layer,
             return_pairwise_repr_layer_idx = [self.contact_layer],
-            return_seq_weights = False,
+            return_seq_weights = return_seq_weights,
         )
 
         # Predict contacts
