@@ -38,7 +38,7 @@ pip install -e .
 The model's weights can be downloaded from Huggingface under [HuggingFace/yakiyama/MSA-Pairformer](https://huggingface.co/yakiyama/MSA-Pairformer/).
 ```py
 from huggingface_hub import login
-from MSAPairformer.model import MSAPairformer
+from MSA_Pairformer.model import MSAPairformer
 
 # Use the GPU if available
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
