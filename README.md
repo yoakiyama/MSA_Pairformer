@@ -76,7 +76,7 @@ msa_tokenized_t = msa_obj.diverse_tokenized_msa
   mask, msa_mask, full_mask, pairwise_mask = mask.to(device), msa_mask.to(device), full_mask.to(device), pairwise_mask.to(device)
   
 # Predict contacts and embed query sequence
-results_dict = model.get_embeddings_and_contacts()
+results_dict = model.get_embeddings_and_contacts() 
 with torch.no_grad():
   with torch.amp.autocast(dtype=torch.bfloat16, device_type="cuda"):
       res = global_model(  # Use the pre-loaded global model
