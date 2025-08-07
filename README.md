@@ -40,6 +40,7 @@ The model's weights can be downloaded from Huggingface under [HuggingFace/yakiya
 from huggingface_hub import login
 from MSA_Pairformer.model import MSAPairformer
 import torch
+import numpy as np
 
 # Use the GPU if available
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
