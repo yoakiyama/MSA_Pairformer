@@ -39,7 +39,7 @@ The model's weights can be downloaded from Huggingface under [HuggingFace/yakiya
 ```py
 from huggingface_hub import login
 from MSA_Pairformer.model import MSAPairformer
-from MSA_Pairformer.dataset import MSA,aa2tok_d
+from MSA_Pairformer.dataset import MSA, aa2tok_d, prepare_msa_masks
 import torch
 import numpy as np
 
