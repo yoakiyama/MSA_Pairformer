@@ -39,6 +39,9 @@ The model's weights can be downloaded from Huggingface under [HuggingFace/yakiya
 ```py
 from huggingface_hub import login
 from MSA_Pairformer.model import MSAPairformer
+from MSA_Pairformer.dataset import MSA, aa2tok_d, prepare_msa_masks
+import torch
+import numpy as np
 
 # Use the GPU if available
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -73,10 +76,10 @@ msa_tokenized_t = msa_obj.diverse_tokenized_msa
   mask, msa_mask, full_mask, pairwise_mask = mask.to(device), msa_mask.to(device), full_mask.to(device), pairwise_mask.to(device)
   
 # Predict contacts and embed query sequence
-results_dict = model.get_embeddings_and_contacts()
+# results_dict = model.get_embeddings_and_contacts()
 with torch.no_grad():
   with torch.amp.autocast(dtype=torch.bfloat16, device_type="cuda"):
-      res = global_model(  # Use the pre-loaded global model
+      res = model.forward(  # Use the pre-loaded global model
           msa=msa_onehot_t.to(torch.bfloat16),
           mask=mask,
           msa_mask=msa_mask,
@@ -88,7 +91,7 @@ with torch.no_grad():
           return_msa_repr_layer_idx=None
       )
 
-  results.keys()
+res.keys()
   # res is a dictionary with the following keys: final_msa_repr, final_pairwise_repr, msa_repr_d, pairwise_repr_d, seq_weights_list_d, logits, contacts, total_length, max_msa_depth, weight_scale
 
 
