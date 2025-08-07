@@ -76,10 +76,10 @@ msa_tokenized_t = msa_obj.diverse_tokenized_msa
   mask, msa_mask, full_mask, pairwise_mask = mask.to(device), msa_mask.to(device), full_mask.to(device), pairwise_mask.to(device)
   
 # Predict contacts and embed query sequence
-results_dict = model.get_embeddings_and_contacts()
+# results_dict = model.get_embeddings_and_contacts()
 with torch.no_grad():
   with torch.amp.autocast(dtype=torch.bfloat16, device_type="cuda"):
-      res = global_model(  # Use the pre-loaded global model
+      res = model.forward(  # Use the pre-loaded global model
           msa=msa_onehot_t.to(torch.bfloat16),
           mask=mask,
           msa_mask=msa_mask,
@@ -91,7 +91,7 @@ with torch.no_grad():
           return_msa_repr_layer_idx=None
       )
 
-  results.keys()
+res.keys()
   # res is a dictionary with the following keys: final_msa_repr, final_pairwise_repr, msa_repr_d, pairwise_repr_d, seq_weights_list_d, logits, contacts, total_length, max_msa_depth, weight_scale
 
 
