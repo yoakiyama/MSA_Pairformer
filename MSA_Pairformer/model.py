@@ -155,15 +155,16 @@ class CoreModule(Module):
         return_repr_after_layer_idx: int | None = None,
         return_seq_weights: bool = False,
     ) -> Float['b s n dm']:
-        # Track seq weights
+        # Track seq weights, pairwise representations, and MSA representations for specified layers
+        # seq weights are tracked throughout all layers
         seq_weights_list_d = {}
         pairwise_repr_d = {}
         msa_repr_d = {}
-        # Turn return layer indices into lists
         if isinstance(return_msa_repr_layer_idx, int):
             return_msa_repr_layer_idx = [return_msa_repr_layer_idx]
         if isinstance(return_pairwise_repr_layer_idx, int):
             return_pairwise_repr_layer_idx = [return_pairwise_repr_layer_idx]
+            
         # Pass MSA through each layer of the core module stack
         for layer_idx, (
             msa_pair_weighted_avg,
@@ -176,7 +177,7 @@ class CoreModule(Module):
             msa = msa + msa_residual
             msa = msa + msa_transition(msa)
             if (return_msa_repr_layer_idx is None) or (layer_idx in return_msa_repr_layer_idx):
-                msa_repr_d[f"layer_{layer_idx}"] = msa[:, :1, :, :] if query_only else msa
+                msa_repr_d[f"layer_{layer_idx}"] = msa[:, :1, :, :].cpu() if query_only else msa
             del msa_residual
 
             # Compute outer product mean (with residual connection)
@@ -191,12 +192,12 @@ class CoreModule(Module):
             pairwise_repr = pairwise_repr + update_pairwise_repr
             del update_pairwise_repr
             if return_seq_weights:
-                seq_weights_list_d[f"layer_{layer_idx}"] = norm_weights
+                seq_weights_list_d[f"layer_{layer_idx}"] = norm_weights.cpu()
 
             # Pairwise representation block
             pairwise_repr = pairwise_block(pairwise_repr = pairwise_repr, mask = mask)
             if (return_pairwise_repr_layer_idx is None) or (layer_idx in return_pairwise_repr_layer_idx):
-                pairwise_repr_d[f"layer_{layer_idx}"] = pairwise_repr
+                pairwise_repr_d[f"layer_{layer_idx}"] = pairwise_repr.cpu()
 
             # Break out of loop early if we've reached the layer from which we want to compute the representations
             if (return_repr_after_layer_idx is not None) and (layer_idx == return_repr_after_layer_idx):
@@ -213,12 +214,12 @@ class CoreModule(Module):
             del msa_residual
             msa = msa + self.final_msa_transition(msa)
             if (return_msa_repr_layer_idx is not None) and (layer_idx+1 in return_msa_repr_layer_idx):
-                msa_repr_d[f"layer_{layer_idx+1}"] = msa[:, :1, :, :] if query_only else msa
+                msa_repr_d[f"layer_{layer_idx+1}"] = msa[:, :1, :, :].cpu() if query_only else msa
         
         # Organize results
         res = {}
-        res['final_msa_repr'] = msa[:, :1, :, :] if query_only else msa
-        res['final_pairwise_repr'] = pairwise_repr
+        res['final_msa_repr'] = msa[:, :1, :, :].cpu() if query_only else msa
+        res['final_pairwise_repr'] = pairwise_repr.cpu()
         res['msa_repr_d'] = msa_repr_d
         res['pairwise_repr_d'] = pairwise_repr_d
         res['seq_weights_list_d'] = seq_weights_list_d
@@ -316,7 +317,7 @@ class MSAPairformer(Module):
     @property
     def device(self):
         """Device of the model."""
-        return self.zero.device
+        return self.core_stack.zero.device
 
     ###### Load model ######
     @classmethod
@@ -447,5 +448,5 @@ class MSAPairformer(Module):
         )
 
         # Predict contacts
-        contacts = self.contact_head(results['pairwise_repr_d'][f'layer_{self.contact_layer}'])
+        contacts = self.contact_head(results['pairwise_repr_d'][f'layer_{self.contact_layer}'].to(self.device))
         return contacts
