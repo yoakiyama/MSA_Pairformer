@@ -360,6 +360,13 @@ class MSAPairformer(Module):
 
         return msa, pairwise_repr
 
+    # Toggle query-biased attention
+    def turn_off_seq_attn(self):
+        self.core_stack.turn_off_seq_attn()
+
+    def turn_on_seq_attn(self):
+        self.core_stack.turn_on_seq_attn()
+
     ###### Make predictions / embeddings ######
     def forward(
         self,

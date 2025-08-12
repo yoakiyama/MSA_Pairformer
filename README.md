@@ -30,9 +30,29 @@ git clone git@github.com:yoakiyama/MSA_Pairformer.git
 pip install -e .
 ```
 
+### Installing hhsuite (for filtering MSAs)
+
+We use hhfilter (part of hhsuite) as the default option for subsampling MSAs. To install hhsuite, please follow these directions:
+
+```
+curl -fsSL https://github.com/soedinglab/hh-suite/releases/download/v3.3.0/hhsuite-3.3.0-SSE2-Linux.tar.gz
+tar xz -C hhsuite
+```
+def _setup_tools():
+  """Download and compile C++ tools."""
+
+  # Install HHsuite
+  hhsuite_path = "hhsuite"
+  if not os.path.isdir(hhsuite_path):
+      print("Installing HHsuite...")
+      os.makedirs(hhsuite_path, exist_ok=True)
+      url = "https://github.com/soedinglab/hh-suite/releases/download/v3.3.0/hhsuite-3.3.0-SSE2-Linux.tar.gz"
+      os.system(f"curl -fsSL {url} | tar xz -C {hhsuite_path}/")
+```
+
 ## MSA Pairformer <a name="MSA-Pairformer"></a>
 
-[MSA Pairformer](https://arxiv.org/) extracts evolutionary signals most relevant to a query sequence from a set of aligned homologous sequences. Using only 111M parameters, it can easily run on consumer-grade hardware (e.g. NVIDIA RTX 4090) and achieve state-of-the-art performance. In this repository, we provide training code and Google Colab notebooks to reproduce the results in the pre-print. We are excited to deliver this tool to the research community and to see all of its applications to real-world biological challenges.
+[MSA Pairformer](https://www.biorxiv.org/content/10.1101/2025.08.02.668173v1) extracts evolutionary signals most relevant to a query sequence from a set of aligned homologous sequences. Using only 111M parameters, it can easily run on consumer-grade hardware (e.g. NVIDIA RTX 4090) and achieve state-of-the-art performance. In this repository, we provide training code and Google Colab notebooks to reproduce the results in the pre-print. We are excited to deliver this tool to the research community and to see all of its applications to real-world biological challenges.
 
 ### Getting started with MSA Pairformer <a name="getting-started"></a>
 The model's weights can be downloaded from Huggingface under [HuggingFace/yakiyama/MSA-Pairformer](https://huggingface.co/yakiyama/MSA-Pairformer/).
