@@ -125,8 +125,8 @@ class MSA:
         self.secondary_filter_method = secondary_filter_method
         self.random_query = random_query
 
-        assert self.diverse_select_method in ["greedy", "hhfilter"], "Diverse select method must be either 'greedy' or 'hhfilter'"
-        assert self.secondary_filter_method in ["greedy", "random"], "Secondary filter method must be either 'greedy' or 'random'"
+        assert self.diverse_select_method in ["greedy", "hhfilter", "none"], "Diverse select method must be either 'greedy' or 'hhfilter', or 'none' if no diverse selection is desired"
+        assert self.secondary_filter_method in ["greedy", "random", "none"], "Secondary filter method must be either 'greedy' or 'random', or 'none' if no secondary filter is desired"
 
         # Parse MSA file
         self.seq_l, self.ids_l = self.parse_a3m_file(**parser_kwargs)
@@ -150,15 +150,18 @@ class MSA:
         # Currently capping the MSA to some number (max_seqs) of sequences
         # Could instead use min(full_msa_depth, max_tokens // sequence_length)
         sequence_length = self.random_crop.shape[1]
-        subset_depth = min(self.max_tokens // sequence_length, max_seqs)
-        self.subset_depth = subset_depth
-        self.select_diverse_msa, self.select_diverse_indices = self.select_diverse(
-            msa_a=self.random_crop,
-            num_seqs=self.max_seqs,
-            method=diverse_select_method,
-            hhfilter_kwargs=hhfilter_kwargs,
-            secondary_filter_method=self.secondary_filter_method
-        )
+        self.subset_depth = min(self.max_tokens // sequence_length, self.max_seqs)
+        if self.diverse_select_method == "none":
+            self.select_diverse_msa = self.random_crop
+            self.select_diverse_indices = np.arange(self.random_crop.shape[0])
+        else:
+            self.select_diverse_msa, self.select_diverse_indices = self.select_diverse(
+                msa_a=self.random_crop,
+                num_seqs=self.max_seqs,
+                method=diverse_select_method,
+                hhfilter_kwargs=hhfilter_kwargs,
+                secondary_filter_method=self.secondary_filter_method
+            )
         # Tokenize diverse MSA
         self.diverse_tokenized_msa = self.tokenize_msa(self.select_diverse_msa)
         self.n_diverse_seqs = self.diverse_tokenized_msa.shape[0]
@@ -263,6 +266,8 @@ class MSA:
                     random_indices = np.concatenate([[0], np.random.choice(np.arange(1, filtered_msa.shape[0]), num_seqs-1, replace=False)])
                     filtered_msa = filtered_msa[random_indices]
                     kept_indices = [kept_indices[i] for i in random_indices]
+                elif secondary_filter_method == "none":
+                    pass
                 else:
                     raise ValueError(f"Secondary filter method must be either 'greedy' or 'random', got {secondary_filter_method}")
             return filtered_msa, kept_indices
