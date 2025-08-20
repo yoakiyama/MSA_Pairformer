@@ -71,70 +71,45 @@ aa2tok_d = {
     "U": 23, # SEC
     "O": 24, # PYL
     "-": 25, # GAP
-    "PAD": 26, # Padded positions
-    "MASK": 27, # Mask
+    "<pad>": 26, # Padded positions
+    "<mask>": 27, # Mask
 }
-
-# ESM token to index
-esm_aa2tok_d = {
-    '<cls>': 0,
-    '<pad>': 1,
-    '<eos>': 2,
-    '<unk>': 3,
-    'L': 4,
-    'A': 5,
-    'G': 6,
-    'V': 7,
-    'S': 8,
-    'E': 9,
-    'R': 10,
-    'T': 11,
-    'I': 12,
-    'D': 13,
-    'P': 14,
-    'K': 15,
-    'Q': 16,
-    'N': 17,
-    'F': 18,
-    'Y': 19,
-    'M': 20,
-    'H': 21,
-    'W': 22,
-    'C': 23,
-    'X': 24,
-    'B': 25,
-    'U': 26,
-    'Z': 27,
-    'O': 28,
-    '.': 29,
-    '-': 30,
-    '<null_1>': 31,
-    '<mask>': 32
-}
-
-esm2pairformer_tok_d = {
-    esm_aa2tok_d[k]: aa2tok_d[k] for k in esm_aa2tok_d if k in aa2tok_d
-}
-esm2pairformer_tok_d[esm_aa2tok_d['<mask>']] = aa2tok_d['MASK']
-esm2pairformer_tok_d[esm_aa2tok_d['<pad>']] = aa2tok_d['PAD']
 tok2aa_d = {aa2tok_d[k]:k for k in aa2tok_d}
 nTokenTypes = len(np.unique(list(aa2tok_d.values())))
+
+# ESM token to amino acid
+ESM_SEQUENCE_VOCAB = [
+    "<cls>", "<pad>", "<eos>", "<unk>",
+    "L", "A", "G", "V", "S", "E", "R", "T", "I", "D", "P", "K",
+    "Q", "N", "F", "Y", "M", "H", "W", "C", "X", "B", "U", "Z",
+    "O", ".", "-", "|",
+    "<mask>"
+]
+esm_tok2aa_d = {ind: alph for ind, alph in enumerate(ESM_SEQUENCE_VOCAB)}
+esm_aa2tok_d = {alph: ind for ind, alph in enumerate(ESM_SEQUENCE_VOCAB)}
+esmtok_to_pairformertok_d = {esm_aa2tok_d[aa]: aa2tok_d[aa] if aa in aa2tok_d else -1 for aa in ESM_SEQUENCE_VOCAB}
+esmtok_to_pairformertok_d[esm_aa2tok_d['<unk>']] = aa2tok_d['X'] # Handle unknown tokens with X
+# MSA Pairformer was trained without insertions ".", so they are not part of the vocabulary
+# Full list of tokens that do not appear in the MSA Pairformer are <cls>, <eos>, <unk>, <null_1>, <.>
+# All are mapped to -1 using esmtok_to_pairformertok_d
+
+def convert_tokens_esm2pairformer(batch_tokens: torch.Tensor, device: torch.device = torch.device('cpu')):
+    # MSA Transformer uses a CLS token, but MSA Pairformer does not
+    # We'll remove the first token to account for this disparity
+    return torch.from_numpy(np.vectorize(esmtok_to_pairformertok_d.get)(batch_tokens.cpu().numpy()))[:, :, 1:].to(device)
+
 
 class MSA:
     def __init__(
         self,
-        msa_file_path: Union[str, Path],
-        pdb_file_path: Union[str, Path] = None,
-        max_length: int = 1024,
-        max_tokens: int = 131072,
-        max_seqs: int = 1024,
-        diverse_select_method = "hhfilter",
-        random_query: bool = False,
-        min_query_coverage: float = 0.8,
-        n_append_random: int = 0,
-        shifted_random: bool = False,
-        scramble_seq_perc: float = None,
-        scramble_col_perc: float = None,
+        msa_file_path: Union[str, Path], # Path to MSA file
+        max_length: int = 1024, # Maximum length of the MSA (default is 1024)
+        max_tokens: int = 1048576, # Maximum number of tokens in the MSA (default is 1024 * 1024)
+        max_seqs: int = 1024, # Maximum number of sequences in the MSA (default is 1024)
+        diverse_select_method = "hhfilter", # Method to select diverse sequences (default is "hhfilter")
+        secondary_filter_method: str = "greedy",  # Options: "greedy" or "random" (default is "greedy")
+        random_query: bool = False, # Whether to select a random query sequence (default is to use the first sequence as the query)
+        min_query_coverage: float = 0.8, # Minimum query coverage if selecting a random query sequence
         parser_kwargs: dict = {
             "keep_insertions": False,
             "to_upper": False,
@@ -143,12 +118,15 @@ class MSA:
         hhfilter_kwargs: dict = {}
     ):
         self.msa_file_path = msa_file_path
-        self.pdb_file_path = pdb_file_path
         self.max_length = max_length
         self.max_tokens = max_tokens
         self.max_seqs = max_seqs
         self.diverse_select_method = diverse_select_method
+        self.secondary_filter_method = secondary_filter_method
         self.random_query = random_query
+
+        assert self.diverse_select_method in ["greedy", "hhfilter"], "Diverse select method must be either 'greedy' or 'hhfilter'"
+        assert self.secondary_filter_method in ["greedy", "random"], "Secondary filter method must be either 'greedy' or 'random'"
 
         # Parse MSA file
         self.seq_l, self.ids_l = self.parse_a3m_file(**parser_kwargs)
@@ -174,61 +152,27 @@ class MSA:
         sequence_length = self.random_crop.shape[1]
         subset_depth = min(self.max_tokens // sequence_length, max_seqs)
         self.subset_depth = subset_depth
-        self.select_diverse_msa, self.select_diverse_indices = self.select_diverse(msa_a=self.random_crop, num_seqs=self.max_seqs, method=diverse_select_method, hhfilter_kwargs=hhfilter_kwargs)
+        self.select_diverse_msa, self.select_diverse_indices = self.select_diverse(
+            msa_a=self.random_crop,
+            num_seqs=self.max_seqs,
+            method=diverse_select_method,
+            hhfilter_kwargs=hhfilter_kwargs,
+            secondary_filter_method=self.secondary_filter_method
+        )
         # Tokenize diverse MSA
         self.diverse_tokenized_msa = self.tokenize_msa(self.select_diverse_msa)
         self.n_diverse_seqs = self.diverse_tokenized_msa.shape[0]
-        if n_append_random > 0:
-            if not shifted_random:
-                # n_pssm, n_uniform_random = n_append_random // 2, n_append_random // 2
-                n_pssm, n_uniform_random = 0, n_append_random
-                # Compute PSSM of diverse MSA
-                pssm = self.compute_pssm(self.diverse_tokenized_msa) # [nPos, 26]
-                uniform_dist = torch.ones_like(pssm) / pssm.shape[1] # [nPos, 26]
-                self.diverse_tokenized_msa = torch.cat(
-                    [self.diverse_tokenized_msa, self.generate_random_sequences(uniform_dist, n_uniform_random)],
-                    dim=0
-                )
-            else:
-                # Randomly sample n_append_random sequences from the MSA, then shift everything to the right by 1 column
-                # Sample random sequences from MSA
-                random_indices = torch.randint(0, self.diverse_tokenized_msa.shape[0], (n_append_random,))
-                sampled_seqs = self.diverse_tokenized_msa[random_indices]
-                # Shift columns to the right by 1 (last column becomes first)
-                shifted_seqs = torch.roll(sampled_seqs, shifts=1, dims=1)
-                # Append shifted sequences to MSA
-                self.diverse_tokenized_msa = torch.cat([self.diverse_tokenized_msa, shifted_seqs], dim=0)
-        if (scramble_seq_perc is not None) and (scramble_col_perc is not None):
-            assert 0.0 < scramble_seq_perc <= 1.0 and 0.0 < scramble_col_perc <= 1.0, "Scramble sequence and column percentages must be between 0 and 1"
-            # Randomly select scramble_seq_perc sequences and permute scramble_col_perc of their columns
-            nSeqs = self.diverse_tokenized_msa.shape[0] - 1
-            nCols = self.diverse_tokenized_msa.shape[1]
-            scramble_seq_ub = int((nSeqs) * scramble_seq_perc)
-            scramble_col_ub = int(nCols * scramble_col_perc)
-            scramble_seq_idxs = torch.randperm(nSeqs)[:scramble_seq_ub] + 1 # Exclude query sequence
-            scramble_col_idxs = torch.randperm(nCols)[:scramble_col_ub]
-            target_order = torch.randperm(scramble_col_ub)
-            permuted_msa = self.diverse_tokenized_msa.clone()
-            for seq_idx in scramble_seq_idxs:
-                original_values = permuted_msa[seq_idx, scramble_col_idxs].clone()
-                permuted_msa[seq_idx, scramble_col_idxs] = original_values[target_order]
-            del self.diverse_tokenized_msa
-            self.diverse_tokenized_msa = permuted_msa
-            self.permuted_seqs = torch.zeros(nSeqs+1, dtype=torch.long)
-            self.permuted_seqs[scramble_seq_idxs] = 1
-            self.permuted_cols = torch.zeros(nCols, dtype=torch.long)
-            self.permuted_cols[scramble_col_idxs] = 1
 
     def compute_pssm(self, msa_a):
         # Get counts excluding padding token (26) and create probability distribution
         nSeqs, nPos = msa_a.shape
-        probs = torch.zeros(nPos, 26)  # Initialize output tensor [nPos, 26]
+        probs = torch.zeros(nPos, aa2tok_d['<pad>'])  # Initialize output tensor [nPos, 26]
 
         # For each position in sequence
         for i in range(nPos):
             pos_tensor = msa_a[:, i]  # Get all sequences at this position
-            mask = pos_tensor != aa2tok_d['PAD']  # Mask padding tokens
-            counts = torch.bincount(pos_tensor[mask], minlength=26)  # Count tokens at this position
+            mask = pos_tensor != aa2tok_d['<pad>']  # Mask padding tokens
+            counts = torch.bincount(pos_tensor[mask], minlength=aa2tok_d['<pad>'])  # Count tokens at this position
             probs[i] = counts.float() / counts.sum()  # Convert to probabilities
         return probs
 
@@ -300,7 +244,7 @@ class MSA:
         start = np.random.randint(0, seq_len - max_length)
         return self.seq_a[:, start:start+max_length], start, start+max_length-1
 
-    def select_diverse(self, msa_a, num_seqs: int, method: str = "hhfilter", hhfilter_kwargs: dict = {}):
+    def select_diverse(self, msa_a, num_seqs: int, method: str = "hhfilter", hhfilter_kwargs: dict = {}, secondary_filter_method: str = "greedy"):
         assert method in ['greedy', 'hhfilter'], "Method must be either 'greedy' or 'hhfilter'"
         if method == 'greedy':
             return self.greedy_select(msa_a, num_seqs)
@@ -310,8 +254,17 @@ class MSA:
             # If hhfilter returns more sequences than maximum depth,
             # maximize diversity with maximum depth
             if num_seqs < filtered_msa.shape[0]:
-                filtered_msa, greedy_kept_indices = self.greedy_select(filtered_msa, num_seqs)
-                kept_indices = [kept_indices[i] for i in greedy_kept_indices]
+                if secondary_filter_method == "greedy":
+                    # Greedily select for maximum MSA diversity
+                    filtered_msa, greedy_kept_indices = self.greedy_select(filtered_msa, num_seqs)
+                    kept_indices = [kept_indices[i] for i in greedy_kept_indices]
+                elif secondary_filter_method == "random":
+                    # Randomly select num_seqs sequences (always include query sequence)
+                    random_indices = np.concatenate([[0], np.random.choice(np.arange(1, filtered_msa.shape[0]), num_seqs-1, replace=False)])
+                    filtered_msa = filtered_msa[random_indices]
+                    kept_indices = [kept_indices[i] for i in random_indices]
+                else:
+                    raise ValueError(f"Secondary filter method must be either 'greedy' or 'random', got {secondary_filter_method}")
             return filtered_msa, kept_indices
         else:
             raise ValueError("Method must be either 'greedy' or 'hhfilter'")
@@ -346,8 +299,7 @@ class MSA:
         qid: int=15,
         qsc: float=-20.0,
         maxseq: int=None,
-        # binary="hhfilter",
-        binary="/home/ubuntu/tools/hhsuite/bin/hhfilter"
+        binary="hhfilter",
     ):
         # Get tmp directory from environment
         tmpdir_base = os.environ.get("TMPDIR", "/tmp/")
@@ -392,11 +344,7 @@ class MSADataset(Dataset):
         min_depth = 4,
         transform = None,
         random_query: bool = False,
-        min_query_coverage: float = 0.8,
-        n_append_random: int = 0,
-        shifted_random: bool = False,
-        scramble_seq_perc: float = None,
-        scramble_col_perc: float = None
+        min_query_coverage: float = 0.8
     ):
         """
         data_dir is the parent directory that stores all of the MSA .a3m files
@@ -411,10 +359,6 @@ class MSADataset(Dataset):
         self.min_depth = min_depth
         self.random_query = random_query
         self.min_query_coverage = min_query_coverage
-        self.n_append_random = n_append_random
-        self.shifted_random = shifted_random
-        self.scramble_seq_perc = scramble_seq_perc
-        self.scramble_col_perc = scramble_col_perc
         if msa_paths is None:
             self.msa_paths = glob(os.path.join(msa_dir, "*/a3m/*.a3m"))
         else:
@@ -427,7 +371,7 @@ class MSADataset(Dataset):
         res_d = {}
         # Get MSA file path
         msa_path = self.msa_paths[idx]
-        # Create MSA mobject
+        # Create MSA object
         msa = MSA(
             msa_path,
             max_length = self.max_seq_length,
@@ -435,11 +379,7 @@ class MSADataset(Dataset):
             max_tokens = self.max_tokens,
             diverse_select_method = "hhfilter",
             random_query = self.random_query,
-            min_query_coverage = self.min_query_coverage,
-            n_append_random = self.n_append_random,
-            shifted_random = self.shifted_random,
-            scramble_seq_perc = self.scramble_seq_perc,
-            scramble_col_perc = self.scramble_col_perc
+            min_query_coverage = self.min_query_coverage    
         )
         # Get tokenized MSA
         res_d['tokenized_msa'] = msa.diverse_tokenized_msa
@@ -447,16 +387,12 @@ class MSADataset(Dataset):
         res_d['n_diverse_seqs'] = msa.n_diverse_seqs
         # Add file path
         res_d['file_path'] = msa_path
-        # Add permuted sequences and columns if they exist
-        if (self.scramble_seq_perc is not None) or (self.scramble_col_perc is not None):
-            res_d['permuted_seqs'] = msa.permuted_seqs
-            res_d['permuted_cols'] = msa.permuted_cols
         return res_d     
 
 def msa_mlm(
     msa_t: torch.tensor, 
-    mask_tok: int = aa2tok_d['MASK'],
-    pad_tok: int = aa2tok_d['PAD'],
+    mask_tok: int = aa2tok_d['<mask>'],
+    pad_tok: int = aa2tok_d['<pad>'],
     mask_prob: float = 0.15,
     mask_ratio: float = 0.8,
     mutate_ratio: float = 0.1,
@@ -493,11 +429,13 @@ def msa_mlm(
     if mutate_pssm:
         # Get column indices of mutate_indices
         batch_indices, seq_indices, pos_indices = torch.unravel_index(torch.tensor(mutate_indices), msa_t.shape)
-        # Compute PSSM of mutate_indices
+        # Compute PSSM of mutate_indices (exclude padding tokens)
         counts_t = torch.nn.functional.one_hot(msa_t, num_classes=msa_t.shape[-1]).sum(dim=1)[:, :, :26]
         pssm = counts_t / counts_t.sum(dim=-1, keepdim=True)
         probs_t = pssm[batch_indices, pos_indices]
-        new_toks_t = torch.stack([torch.multinomial(probs_t[i], num_samples=1) for i in range(len(mutate_indices))]).squeeze()
+        probs_t = probs_t[mutate_indices]
+        new_toks_t = torch.multinomial(probs_t, num_samples=1)
+        # new_toks_t = torch.stack([torch.multinomial(probs_t[i], num_samples=1) for i in range(len(mutate_indices))]).squeeze()
         # Apply mutations
         masked_msas.view(-1)[mutate_indices] = new_toks_t
     else:
@@ -512,8 +450,8 @@ class CollateAFBatch():
         max_seq_length,
         max_seq_depth,
         min_seq_depth,
-        pad_tok=aa2tok_d['PAD'],
-        mask_tok=aa2tok_d['MASK'], 
+        pad_tok=aa2tok_d['<pad>'],
+        mask_tok=aa2tok_d['<mask>'], 
         mask_prob=0.15,
         mask_ratio=0.8,
         mutate_ratio=0.1,
@@ -522,7 +460,6 @@ class CollateAFBatch():
         tok_high=25,
         query_only=False,
         mutate_pssm=False,
-        n_append_random=0
     ):
         self.max_seq_depth = max_seq_depth
         self.max_seq_length = max_seq_length
@@ -537,7 +474,6 @@ class CollateAFBatch():
         self.tok_high = tok_high
         self.mutate_pssm = mutate_pssm
         self.query_only = query_only
-        self.n_append_random = n_append_random
 
     def __call__(self, batch):
         # Initialize output dictionary
@@ -580,25 +516,10 @@ class CollateAFBatch():
         else:
             output_dict['masked_idx'] = mlm_indices
         output_dict['unmasked_msas_onehot'] = one_hot(msas, num_classes = nTokenTypes)
-
-        # Add indices for permuted sequences and columns if they exist
-        if 'permuted_seqs' in batch[0]:
-            permuted_seq_l = [batch[i]['permuted_seqs'] for i in range(og_batch_size) if valid_msa[i]]
-            permuted_seqs_a = np.full((effective_batch_size, self.max_seq_depth), fill_value=0, dtype=np.int32)
-            for permuted_seq_map, ex_map in zip(permuted_seqs_a, permuted_seq_l):
-                map_slice = tuple(slice(dim) for dim in ex_map.shape)
-                permuted_seq_map[map_slice] = ex_map
-            output_dict['permuted_seqs'] = torch.from_numpy(permuted_seqs_a).bool()
-            permuted_cols_l = [batch[i]['permuted_cols'] for i in range(og_batch_size) if valid_msa[i]]
-            permuted_cols_a = np.full((effective_batch_size, self.max_seq_length), fill_value=0, dtype=np.int32)
-            for permuted_cols_map, ex_map in zip(permuted_cols_a, permuted_cols_l):
-                map_slice = tuple(slice(dim) for dim in ex_map.shape)
-                permuted_cols_map[map_slice] = ex_map
-            output_dict['permuted_cols'] = torch.from_numpy(permuted_cols_a).bool()
     
         # Initialize additional molecule features
-        additional_molecule_feats = prepare_additional_molecule_feats(output_dict['msas_onehot'])
-        output_dict['additional_molecule_feats'] = additional_molecule_feats
+        molecule_feats = prep_molecule_feats(output_dict['msas_onehot'])
+        output_dict['molecule_feats'] = molecule_feats
         # Store file path
         output_dict['file_path'] = [batch[i]['file_path'] for i in range(og_batch_size) if valid_msa[i]]
         # Store MSA depth
@@ -609,11 +530,6 @@ class CollateAFBatch():
         output_dict['msa_mask'] = msa_mask
         output_dict['full_mask'] = full_mask
         output_dict['pairwise_mask'] = pairwise_mask
-        adversarial_seq_mask = torch.zeros_like(msa_mask, dtype=torch.bool)
-        n_seqs_batch = msa_mask.sum(dim=-1)
-        for i in range(msa_mask.shape[0]):
-            adversarial_seq_mask[i, n_seqs_batch[i] - self.n_append_random:n_seqs_batch[i]] = True
-        output_dict['adversarial_seq_mask'] = adversarial_seq_mask
         return output_dict
 
 def prep_molecule_feats(msa_input):
@@ -639,9 +555,9 @@ def onehot_msa(msa_input, device=torch.device('cpu')):
 
 def prepare_msa_masks(msa_input, device=torch.device('cpu')):
     # msa_input is of shape [b, s, n]
-    mask = (msa_input != aa2tok_d['PAD']).any(dim=1) # [b, n]
-    msa_mask = (msa_input != aa2tok_d['PAD']).any(dim=2) # [b, s]
-    full_mask = (msa_input != aa2tok_d['PAD']) # [b, s, n]
+    mask = (msa_input != aa2tok_d['<pad>']).any(dim=1) # [b, n]
+    msa_mask = (msa_input != aa2tok_d['<pad>']).any(dim=2) # [b, s]
+    full_mask = (msa_input != aa2tok_d['<pad>']) # [b, s, n]
     pairwise_mask = einx.logical_and("... i, ... j -> ... i j", mask, mask) # [b, n, n]
     return mask.to(device), msa_mask.to(device), full_mask.to(device), pairwise_mask.to(device)
 
@@ -652,8 +568,8 @@ def prepare_inputs(batch, device):
     mask = mask.to(device)
     full_mask = full_mask.to(device)
     pairwise_mask = pairwise_mask.to(device)
-    additional_molecule_feats = batch['additional_molecule_feats'].to(device)
-    return msa_repr, mask, msa_mask, full_mask, pairwise_mask, additional_molecule_feats
+    molecule_feats = batch['molecule_feats'].to(device)
+    return msa_repr, mask, msa_mask, full_mask, pairwise_mask, molecule_feats
 
 def prepare_inputs_bf16(batch, device):
     msa_repr = batch['msas_onehot'].bfloat16().to(device)
@@ -662,248 +578,8 @@ def prepare_inputs_bf16(batch, device):
     mask = mask.to(device)
     full_mask = full_mask.to(device)
     pairwise_mask = pairwise_mask.to(device)
-    additional_molecule_feats = batch['additional_molecule_feats'].bfloat16().to(device)
-    return msa_repr, mask, msa_mask, full_mask, pairwise_mask, additional_molecule_feats
-
-class ConfindContactMap:
-    def __init__(
-        self,
-        confind_file_path: Union[str, Path],
-        confind_cd_threshold: float = 0.01,
-        binarize: bool = True
-    ):
-        self.confind_file_path = confind_file_path
-        self.confind_cd_threshold = confind_cd_threshold
-        self.binarize = binarize
-        self.contact_map = torch.from_numpy(self.get_contact_map())
-        if self.binarize:
-            self.contact_map = self.contact_map > self.confind_cd_threshold
-        else:
-            self.contact_map[self.contact_map < self.confind_cd_threshold] = 0
-
-    def get_contact_map(self):
-        """
-        Get contact map from confind results file
-        """
-        with open(self.confind_file_path, "r") as oFile:
-            lines = oFile.readlines()
-            length = len(lines[-1].split()[1:])
-            contact_a = np.zeros((length, length))
-            for line in lines:
-                if line.startswith('contact'):
-                    split_line = line.split()
-                    res_i = int(split_line[1].split(',')[1]) - 1
-                    res_j = int(split_line[2].split(',')[1]) - 1
-                    if (res_i > length-1) or (res_j > length-1):
-                        print(self.confind_file_path)
-                    c = float(split_line[3])
-                    if c > contact_a[res_i, res_j]:
-                        contact_a[res_i, res_j] = c
-                        contact_a[res_j, res_i] = c
-        return contact_a
-
-class MSAConfindContactMapDataset(Dataset):
-    def __init__(
-        self,
-        paired_paths_l: List[Tuple[Union[str, Path], Union[str, Path]]],
-        subset_msa_mapping_file_path: Union[str, Path] = None,
-        max_seq_length: int = 1024,
-        max_msa_depth: int = 1024,
-        min_msa_depth: int = 8,
-        max_tokens: int = 2**17,
-        confind_cd_threshold: float = 0.01,
-        binarize: bool = True,
-        random_query: bool = False,
-        min_query_coverage: float = 0.9,
-        n_append_random: int = 0,
-        shifted_random: bool = False
-    ):
-        self.paired_paths_l = paired_paths_l
-        self.max_seq_length = max_seq_length
-        self.max_msa_depth = max_msa_depth
-        self.max_tokens = max_tokens
-        self.confind_cd_threshold = confind_cd_threshold
-        self.binarize = binarize
-        self.random_query = random_query
-        self.min_query_coverage = min_query_coverage
-        self.n_append_random = n_append_random
-        self.shifted_random = shifted_random
-        self.subset_msa_mapping_file_path = subset_msa_mapping_file_path
-        if self.subset_msa_mapping_file_path is not None:
-            assert self.subset_msa_mapping_file_path.endswith(".pickle"), "Subset MSA mapping file must be a pickle file"
-            with open(self.subset_msa_mapping_file_path, "rb") as f:
-                self.subset_msa_mapping_d = pickle.load(f)
-        else:
-            self.subset_msa_mapping_d = None
-
-    def __len__(self):
-        return len(self.paired_paths_l)
-
-    def __getitem__(self, idx):
-        # Get MSA file path
-        msa_path, confind_file_path = self.paired_paths_l[idx]
-        # Create MSA mobject
-        msa = MSA(
-            msa_path,
-            max_length = self.max_seq_length,
-            max_seqs = self.max_msa_depth,
-            max_tokens = self.max_tokens,
-            diverse_select_method = "hhfilter",
-            random_query = self.random_query,
-            min_query_coverage = self.min_query_coverage,
-            n_append_random = self.n_append_random,
-            shifted_random = self.shifted_random
-        )
-        res_d = {}
-        # Get tokenized MSA
-        res_d['tokenized_msa'] = msa.diverse_tokenized_msa
-        res_d['n_diverse_seqs'] = msa.n_diverse_seqs
-        # Add subset MSA mapping
-        prot_id = os.path.basename(confind_file_path).split('.')[0]
-        subset_msa_idx_l = self.subset_msa_mapping_d[prot_id]
-        random_crop_min, random_crop_max = msa.random_crop_min, msa.random_crop_max
-        res_d['random_crop_bounds'] = (random_crop_min, random_crop_max)
-        cropped_subset_msa_idx_l = [msa_idx-random_crop_min for msa_idx in subset_msa_idx_l if (msa_idx >= random_crop_min) and (msa_idx <= random_crop_max)]
-        res_d['subset_msa_idx'] = cropped_subset_msa_idx_l
-        # Create contact map
-        contact_crop_min = len([msa_idx for msa_idx in subset_msa_idx_l if msa_idx < random_crop_min])
-        contact_crop_max = len([msa_idx for msa_idx in subset_msa_idx_l if msa_idx > random_crop_max])
-        contact_map = ConfindContactMap(confind_file_path, confind_cd_threshold=self.confind_cd_threshold, binarize=self.binarize)
-        if contact_crop_max > 0:
-            res_d['contact_map'] = contact_map.contact_map[contact_crop_min:-contact_crop_max, contact_crop_min:-contact_crop_max]
-        else:
-            res_d['contact_map'] = contact_map.contact_map[contact_crop_min:, contact_crop_min:]
-        # Add file path
-        res_d['msa_file_path'] = msa_path
-        res_d['confind_file_path'] = confind_file_path
-        return res_d
-    
-
-class ConfindContactMapDataset(Dataset):
-    def __init__(
-        self,
-        confind_file_paths_l: List[Union[str, Path]],
-        confind_cd_threshold: float = 0.01,
-        binarize: bool = True,
-        random_query: bool = False,
-        min_query_coverage: float = 0.8,
-        n_append_random: int = 0,
-        shifted_random: bool = False
-    ):
-        """
-        data_dir is the parent directory that stores all of the MSA .a3m files
-        """
-        assert (msa_dir is not None) or (msa_paths is not None), "Must provide MSA paths or directory path"
-        super().__init__()
-        self.msa_dir = msa_dir
-        self.transform = transform
-        self.max_seq_length = max_seq_length
-        self.max_msa_depth = max_msa_depth
-        self.max_tokens = max_tokens
-        self.min_depth = min_depth
-        self.n_append_random = n_append_random
-        self.shifted_random = shifted_random
-        if msa_paths is None:
-            self.msa_paths = glob(os.path.join(msa_dir, "*/a3m/*.a3m"))
-        else:
-            self.msa_paths = msa_paths
-        
-    def __len__(self):
-        return len(self.msa_paths)
-
-    def __getitem__(self, idx):
-        res_d = {}
-        # Get MSA file path
-        msa_path = self.msa_paths[idx]
-        # Create MSA mobject
-        msa = MSA(
-            msa_path,
-            max_length = self.max_seq_length,
-            max_seqs = self.max_msa_depth,
-            max_tokens = self.max_tokens,
-            diverse_select_method = "hhfilter",
-            random_query = self.random_query,
-            min_query_coverage = self.min_query_coverage,
-            n_append_random = self.n_append_random,
-            shifted_random = self.shifted_random
-        )
-        # Get tokenized MSA
-        res_d['tokenized_msa'] = msa.diverse_tokenized_msa
-        res_d['n_diverse_seqs'] = msa.n_diverse_seqs
-        # Add file path
-        res_d['file_path'] = msa_path
-        return res_d     
-
-class CollateMSAConfindContactMapBatch():
-    def __init__(
-        self, 
-        max_seq_length: int, 
-        max_seq_depth: int,
-        min_seq_depth: int,
-        pad_tok: int = aa2tok_d['PAD']
-    ):
-        self.max_seq_depth = max_seq_depth
-        self.max_seq_length = max_seq_length
-        self.min_seq_depth = min_seq_depth
-        self.pad_tok = pad_tok
-    def __call__(self, batch):
-        # Initialize output dictionary
-        output_dict = {}
-
-        # Skip MSAs with too few sequences
-        valid_msa = [b['n_diverse_seqs'] >= self.min_seq_depth for b in batch]
-        if not any(valid_msa):
-            return None
-    
-        # Get batch size
-        og_batch_size = len(batch)
-        effective_batch_size = sum(valid_msa)
-        
-        # Match sequence lengths and stack tensors
-        tokenized_msa_l = [batch[i]['tokenized_msa'] for i in range(og_batch_size) if valid_msa[i]]
-        shape = [effective_batch_size, self.max_seq_depth, self.max_seq_length]
-        dtype = tokenized_msa_l[0].dtype
-        if isinstance(tokenized_msa_l[0], np.ndarray):
-            msas = np.full(shape, self.pad_tok, dtype=dtype)
-        elif isinstance(tokenized_msa_l[0], torch.Tensor):
-            msas = torch.full(shape, self.pad_tok, dtype=dtype)
-        for msa, seq in zip(msas, tokenized_msa_l):
-            msaslice = tuple(slice(dim) for dim in seq.shape)
-            msa[msaslice] = seq
-        output_dict['msas'] = msas
-        # Match lengths of contact maps
-        contact_map_l = [batch[i]['contact_map'].float() for i in range(og_batch_size) if valid_msa[i]]
-        shape = [effective_batch_size, shape[-1], shape[-1]]
-        dtype = contact_map_l[0].dtype
-        if isinstance(contact_map_l[0], np.ndarray):
-            contacts = np.full(shape, -1, dtype=dtype)
-        elif isinstance(contact_map_l[0], torch.Tensor):
-            contacts = torch.full(shape, -1, dtype=dtype)
-        for i, contact_map in enumerate(contact_map_l):
-            contacts[i, :contact_map.shape[0], :contact_map.shape[1]] = contact_map
-        output_dict['contact_map'] = contacts
-
-        # One-hot encode MSA
-        msas_onehot = one_hot(msas, num_classes = nTokenTypes)
-        output_dict['msas_onehot'] = msas_onehot
-        # Initialize additional molecule features
-        additional_molecule_feats = prepare_additional_molecule_feats(output_dict['msas_onehot'])
-        output_dict['additional_molecule_feats'] = additional_molecule_feats
-        # Store subset MSA indices
-        output_dict['random_crop_bounds'] = [batch[i]['random_crop_bounds'] for i in range(og_batch_size) if valid_msa[i]]
-        output_dict['subset_msa_idx'] = [batch[i]['subset_msa_idx'] for i in range(og_batch_size) if valid_msa[i]]
-        # Store file path
-        output_dict['msa_file_path'] = [batch[i]['msa_file_path'] for i in range(og_batch_size) if valid_msa[i]]
-        output_dict['confind_file_path'] = [batch[i]['confind_file_path'] for i in range(og_batch_size) if valid_msa[i]]
-        # Create subset MSA mask
-        output_dict['subset_msa_mask'] = create_msa_subset_mask(output_dict['subset_msa_idx'], msas.shape[2])
-        # Prepare masks
-        mask, msa_mask, full_mask, pairwise_mask = prepare_msa_masks(output_dict['msas'])
-        output_dict['mask'] = mask
-        output_dict['msa_mask'] = msa_mask
-        output_dict['full_mask'] = full_mask
-        output_dict['pairwise_mask'] = pairwise_mask
-        return output_dict
+    molecule_feats = batch['molecule_feats'].bfloat16().to(device)
+    return msa_repr, mask, msa_mask, full_mask, pairwise_mask, molecule_feats
 
 def create_msa_subset_mask(subset_msa_idx_l, L):
     b = len(subset_msa_idx_l)
@@ -925,9 +601,7 @@ class trRosettaContactMSADataset(Dataset):
         min_msa_depth: int = 8,
         max_tokens: int = 2**17,
         random_query: bool = False,
-        min_query_coverage: float = 0.9,
-        n_append_random: int = 0,
-        shifted_random: bool = False
+        min_query_coverage: float = 0.9
     ):
         self.paired_paths_l = paired_paths_l
         self.max_seq_length = max_seq_length
@@ -935,8 +609,6 @@ class trRosettaContactMSADataset(Dataset):
         self.max_tokens = max_tokens
         self.random_query = random_query
         self.min_query_coverage = min_query_coverage
-        self.n_append_random = n_append_random
-        self.shifted_random = shifted_random
 
     def __len__(self):
         return len(self.paired_paths_l)
@@ -952,9 +624,7 @@ class trRosettaContactMSADataset(Dataset):
             max_tokens = self.max_tokens,
             diverse_select_method = "hhfilter",
             random_query = self.random_query,
-            min_query_coverage = self.min_query_coverage,
-            n_append_random = self.n_append_random,
-            shifted_random = self.shifted_random
+            min_query_coverage = self.min_query_coverage
         )
         res_d = {}
         # Get tokenized MSA
@@ -976,7 +646,7 @@ class CollatetrRosettaContactMSABatch():
         max_seq_length: int, 
         max_seq_depth: int,
         min_seq_depth: int,
-        pad_tok: int = aa2tok_d['PAD']
+        pad_tok: int = aa2tok_d['<pad>']
     ):
         self.max_seq_depth = max_seq_depth
         self.max_seq_length = max_seq_length
@@ -1027,8 +697,8 @@ class CollatetrRosettaContactMSABatch():
         msas_onehot = one_hot(msas, num_classes = nTokenTypes)
         output_dict['msas_onehot'] = msas_onehot
         # Initialize additional molecule features
-        additional_molecule_feats = prepare_additional_molecule_feats(output_dict['msas_onehot'])
-        output_dict['additional_molecule_feats'] = additional_molecule_feats
+        molecule_feats = prep_molecule_feats(output_dict['msas_onehot'])
+        output_dict['molecule_feats'] = molecule_feats
         # Store file path
         output_dict['msa_file_path'] = [batch[i]['msa_file_path'] for i in range(og_batch_size) if valid_msa[i]]
         output_dict['npz_file_path'] = [batch[i]['npz_file_path'] for i in range(og_batch_size) if valid_msa[i]]

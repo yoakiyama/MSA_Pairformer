@@ -128,13 +128,13 @@ class CoreModule(Module):
         # Other parameters
         self.register_buffer('zero', torch.tensor(0.), persistent = False)
 
-    def turn_off_seq_attn(self):
+    def turn_off_query_biasing(self):
         for layer in self.layers:
             for module in layer:
                 if isinstance(module, OuterProduct):
                     module.opm.seq_attn = False
 
-    def turn_on_seq_attn(self):
+    def turn_on_query_biasing(self):
         for layer in self.layers:
             for module in layer:
                 if isinstance(module, OuterProduct):
@@ -362,11 +362,11 @@ class MSAPairformer(Module):
         return msa, pairwise_repr
 
     # Toggle query-biased attention
-    def turn_off_seq_attn(self):
-        self.core_stack.turn_off_seq_attn()
+    def turn_off_query_biasing(self):
+        self.core_stack.turn_off_query_biasing()
 
-    def turn_on_seq_attn(self):
-        self.core_stack.turn_on_seq_attn()
+    def turn_on_query_biasing(self):
+        self.core_stack.turn_on_query_biasing()
 
     ###### Make predictions / embeddings ######
     def forward(
@@ -456,4 +456,9 @@ class MSAPairformer(Module):
 
         # Predict contacts
         contacts = self.contact_head(results['pairwise_repr_d'][f'layer_{self.contact_layer}'].to(self.device))
-        return contacts
+        res = {}
+        res['predicted_contacts'] = contacts
+        if return_seq_weights:
+            res['seq_weights_list_d'] = results['seq_weights_list_d']
+
+        return res
