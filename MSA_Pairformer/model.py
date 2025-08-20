@@ -51,8 +51,7 @@ class CoreModule(Module):
             tri_mult_dim_hidden = None, # Defaults to pair representation dimension
             use_triangle_updates = True,
             use_pair_updates = False # For ablation study
-        ),
-        drop_last_msa_update = False,
+        )
     ):
         super().__init__()
 
@@ -111,19 +110,15 @@ class CoreModule(Module):
         # Store layers in class object
         self.layers = layers
 
-        # If we want to do a final MSA update
-        self.final_msa_pwa = None
-        self.final_msa_transition = None
-        if not drop_last_msa_update:
-            # MSA pair weighted averaging with gating
-            self.final_msa_pwa = MSAPairWeightedAveraging(
-                dim_msa = dim_msa, 
-                dim_pairwise = dim_pairwise,
-                **pwa_kwargs
-            )
-            # Transition module
-            msa_pre_ln = partial(PreLayerNorm, dim = dim_msa)
-            self.final_msa_transition = msa_pre_ln(Transition(dim = dim_msa))
+        # Final MSA update using MSA pair weighted averaging with gating
+        self.final_msa_pwa = MSAPairWeightedAveraging(
+            dim_msa = dim_msa, 
+            dim_pairwise = dim_pairwise,
+            **pwa_kwargs
+        )
+        # Transition module
+        msa_pre_ln = partial(PreLayerNorm, dim = dim_msa)
+        self.final_msa_transition = msa_pre_ln(Transition(dim = dim_msa))
 
         # Other parameters
         self.register_buffer('zero', torch.tensor(0.), persistent = False)
@@ -162,8 +157,12 @@ class CoreModule(Module):
         msa_repr_d = {}
         if isinstance(return_msa_repr_layer_idx, int):
             return_msa_repr_layer_idx = [return_msa_repr_layer_idx]
+        elif return_msa_repr_layer_idx is None:
+            return_msa_repr_layer_idx = []
         if isinstance(return_pairwise_repr_layer_idx, int):
             return_pairwise_repr_layer_idx = [return_pairwise_repr_layer_idx]
+        elif return_pairwise_repr_layer_idx is None:
+            return_pairwise_repr_layer_idx = []
             
         # Pass MSA through each layer of the core module stack
         for layer_idx, (
@@ -176,7 +175,7 @@ class CoreModule(Module):
             msa_residual = msa_pair_weighted_avg(msa = msa, pairwise_repr = pairwise_repr, mask = mask)
             msa = msa + msa_residual
             msa = msa + msa_transition(msa)
-            if (return_msa_repr_layer_idx is None) or (layer_idx in return_msa_repr_layer_idx):
+            if layer_idx in return_msa_repr_layer_idx:
                 msa_repr_d[f"layer_{layer_idx}"] = msa[:, :1, :, :].cpu() if query_only else msa
             del msa_residual
 
@@ -196,15 +195,16 @@ class CoreModule(Module):
 
             # Pairwise representation block
             pairwise_repr = pairwise_block(pairwise_repr = pairwise_repr, mask = mask)
-            if (return_pairwise_repr_layer_idx is None) or (layer_idx in return_pairwise_repr_layer_idx):
+            if layer_idx in return_pairwise_repr_layer_idx:
                 pairwise_repr_d[f"layer_{layer_idx}"] = pairwise_repr.cpu()
 
             # Break out of loop early if we've reached the layer from which we want to compute the representations
             if (return_repr_after_layer_idx is not None) and (layer_idx == return_repr_after_layer_idx):
                 break
+        layer_idx += 1
 
         # Final MSA update
-        if exists(self.final_msa_pwa) and (return_repr_after_layer_idx is None):
+        if (return_repr_after_layer_idx is None) or (layer_idx == return_repr_after_layer_idx):
             msa_residual = self.final_msa_pwa(
                 msa = msa,
                 pairwise_repr = pairwise_repr,
@@ -213,7 +213,7 @@ class CoreModule(Module):
             msa = msa + msa_residual
             del msa_residual
             msa = msa + self.final_msa_transition(msa)
-            if (return_msa_repr_layer_idx is not None) and (layer_idx+1 in return_msa_repr_layer_idx):
+            if layer_idx in return_msa_repr_layer_idx:
                 msa_repr_d[f"layer_{layer_idx+1}"] = msa[:, :1, :, :].cpu() if query_only else msa
         
         # Organize results
@@ -388,7 +388,8 @@ class MSAPairformer(Module):
         # Ensure that contact layer is in return_pairwise_repr_layer_idx if returning contacts
         if return_contacts:
             if return_pairwise_repr_layer_idx is None:
-                return_pairwise_repr_layer_idx = list(np.arange(self.core_stack.depth))
+                # return_pairwise_repr_layer_idx = list(np.arange(self.core_stack.depth))
+                return_pairwise_repr_layer_idx = [self.contact_layer]
             elif isinstance(return_pairwise_repr_layer_idx, int):
                 return_pairwise_repr_layer_idx = [return_pairwise_repr_layer_idx, self.contact_layer]
             elif self.contact_layer not in return_pairwise_repr_layer_idx:
@@ -422,7 +423,7 @@ class MSAPairformer(Module):
         # Predict contacts
         if return_contacts:
             contacts = self.contact_head(results['pairwise_repr_d'][f'layer_{self.contact_layer}'].to(self.device))
-            results['contacts'] = contacts
+            results['predicted_contacts'] = contacts
         return results
 
     ###### Contact prediction ######
@@ -449,7 +450,7 @@ class MSAPairformer(Module):
             pairwise_mask = pairwise_mask,
             seq_weights = seq_weights,
             query_only = True,
-            return_repr_after_layer_idx = self.contact_layer,
+            return_repr_after_layer_idx = [self.contact_layer],
             return_pairwise_repr_layer_idx = [self.contact_layer],
             return_seq_weights = return_seq_weights,
         )
