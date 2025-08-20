@@ -414,14 +414,14 @@ class MSAPairformer(Module):
 
         # Get logits via language modeling head
         if query_only:
-            logits = self.lm_head(results['final_msa_repr'])
+            logits = self.lm_head(results['final_msa_repr'].to(self.device))
         else:
-            logits = self.lm_head(results['final_msa_repr'])
+            logits = self.lm_head(results['final_msa_repr'].to(self.device))
         results['logits'] = logits
 
         # Predict contacts
         if return_contacts:
-            contacts = self.contact_head(results['pairwise_repr_d'][f'layer_{self.contact_layer}'])
+            contacts = self.contact_head(results['pairwise_repr_d'][f'layer_{self.contact_layer}'].to(self.device))
             results['contacts'] = contacts
         return results
 
