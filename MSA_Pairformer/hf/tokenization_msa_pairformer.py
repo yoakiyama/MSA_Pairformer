@@ -26,8 +26,8 @@ class MsaPairformerTokenizer(PreTrainedTokenizerFast):
             tokenizer_object=tokenizer_object,
             # SpecialTokensMixin args
             unk_token='X',
-            pad_token='PAD',
-            mask_token='MASK',
+            pad_token='<pad>',
+            mask_token='<mask>',
             **kwargs
         )
 
@@ -43,11 +43,11 @@ if __name__ == '__main__':
     msa_pairformer_tokenizer = PreTrainedTokenizerFast(
         tokenizer_object=tokenizer_backend,
         unk_token='X',
-        pad_token='PAD',
-        mask_token='MASK'
+        pad_token='<pad>',
+        mask_token='<mask>'
     )
     msa_pairformer_tokenizer.push_to_hub(
         repo_id='yoakiyama/MSA-Pairformer',
-        commit_message='Uploading fast tokenizer for MsaPairformer',
+        commit_message='Updating padding and mask token of fast tokenizer',
         revision="refs/pr/1"
     )
