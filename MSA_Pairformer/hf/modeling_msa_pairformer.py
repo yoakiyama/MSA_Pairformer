@@ -976,8 +976,8 @@ __all__ = [
 
 if __name__ == '__main__':
     repo_id = 'yoakiyama/MSA-Pairformer'
-    msa_pairformer_tokenizer = AutoTokenizer.from_pretrained(repo_id)
-    msa_pairformer = MsaPairformer.from_pretrained(repo_id)
+    msa_pairformer_tokenizer = AutoTokenizer.from_pretrained(repo_id, revision='refs/pr/1')
+    msa_pairformer = MsaPairformer.from_pretrained(repo_id, revision='refs/pr/1')
 
     from MSA_Pairformer.model import MSAPairformer
     from MSA_Pairformer.dataset import prepare_msa_masks
