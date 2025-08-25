@@ -144,6 +144,7 @@ class CoreModule(Module):
         full_mask: Bool['b s n'] | None = None,
         pairwise_mask: Bool['b n n'] | None = None,
         seq_weights: Float['b s'] | None = None,
+        seq_weights_dict: dict = {},
         query_only: bool = True,
         return_msa_repr_layer_idx: List[int] | int | None = None,
         return_pairwise_repr_layer_idx: List[int] | int | None = None,
@@ -180,13 +181,21 @@ class CoreModule(Module):
             del msa_residual
 
             # Compute outer product mean (with residual connection)
+            if seq_weights_dict is not None:
+                if f"layer_{layer_idx}" in seq_weights_dict:
+                    curr_seq_weights = seq_weights_dict[f"layer_{layer_idx}"].to(msa.device)
+            elif seq_weights is not None:
+                curr_seq_weights = seq_weights
+            else:
+                curr_seq_weights = None
+
             update_pairwise_repr, norm_weights = outer_product(
                 msa = msa,
                 mask = mask,
                 msa_mask = msa_mask,
                 full_mask = full_mask,
                 pairwise_mask = pairwise_mask,
-                seq_weights = seq_weights
+                seq_weights = curr_seq_weights
             )
             pairwise_repr = pairwise_repr + update_pairwise_repr
             del update_pairwise_repr
@@ -325,13 +334,17 @@ class MSAPairformer(Module):
         cls,
         device: torch.device | None = None,
         weights_dir: str | None = None,
+        load_confind_head: bool = False,
     ):
         if device is None:
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model = cls()
         path = Path(snapshot_download(repo_id="yakiyama/MSA-Pairformer", cache_dir=weights_dir))
         checkpoint = torch.load(path / "model.bin", weights_only=True, map_location=device)
-        contact_checkpoint = torch.load(path / "contact.bin", weights_only=True, map_location=device)
+        if load_confind_head:
+            contact_checkpoint = torch.load(path / "confind_contact.bin", weights_only=True, map_location=device)
+        else:
+            contact_checkpoint = torch.load(path / "contact.bin", weights_only=True, map_location=device)
         checkpoint.update(contact_checkpoint)
         model.load_state_dict(checkpoint)
         model.to(device)
@@ -377,6 +390,7 @@ class MSAPairformer(Module):
         full_mask: Bool['b s n'] | None = None,
         pairwise_mask: Bool['b n n'] | None = None,
         seq_weights: Float['b s'] | None = None,
+        seq_weights_dict: dict = {},
         return_contacts: bool = True,
         return_seq_weights: bool = False,
         query_only: bool = True,
@@ -406,6 +420,7 @@ class MSAPairformer(Module):
             full_mask = full_mask,
             pairwise_mask = pairwise_mask,
             seq_weights = seq_weights,
+            seq_weights_dict = seq_weights_dict,
             query_only = query_only,
             return_seq_weights = return_seq_weights,
             return_msa_repr_layer_idx = return_msa_repr_layer_idx,
@@ -435,6 +450,7 @@ class MSAPairformer(Module):
         full_mask: Bool['b s n'] | None = None,
         pairwise_mask: Bool['b n n'] | None = None,
         seq_weights: Float['b s'] | None = None,
+        seq_weights_dict: dict = {},
         complex_chain_break_indices: List[int] | None = None,
         return_seq_weights: bool = False,
     ):
@@ -449,6 +465,7 @@ class MSAPairformer(Module):
             full_mask = full_mask,
             pairwise_mask = pairwise_mask,
             seq_weights = seq_weights,
+            seq_weights_dict = seq_weights_dict,
             query_only = True,
             return_repr_after_layer_idx = [self.contact_layer],
             return_pairwise_repr_layer_idx = [self.contact_layer],

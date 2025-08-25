@@ -268,7 +268,7 @@ class PresoftmaxDifferentialOuterProductMean(Module):
             norm_factor = (full_mask.sum(dim=-1) + self.eps).unsqueeze(1).expand(-1, 2, -1) # [b, 2, s]
             seq_weights = seq_weights.masked_fill(~full_mask.unsqueeze(1).expand(-1, 2, -1, -1), 0)
             seq_weights = seq_weights.sum(dim=-1) / norm_factor # [b 2 s]
-            # Compute differential 
+            # Compute differential ``
             seq_weights = seq_weights[:, 0, :] - (lambda_full * seq_weights[:, 1, :]) # [b s]
             seq_weights = seq_weights.masked_fill(~msa_mask, -1e9)
             seq_weights = seq_weights.softmax(dim=-1)
