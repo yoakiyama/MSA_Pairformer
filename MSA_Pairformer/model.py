@@ -181,13 +181,12 @@ class CoreModule(Module):
             del msa_residual
 
             # Compute outer product mean (with residual connection)
+            curr_seq_weights = None
             if seq_weights_dict is not None:
                 if f"layer_{layer_idx}" in seq_weights_dict:
                     curr_seq_weights = seq_weights_dict[f"layer_{layer_idx}"].to(msa.device)
             elif seq_weights is not None:
                 curr_seq_weights = seq_weights
-            else:
-                curr_seq_weights = None
 
             update_pairwise_repr, norm_weights = outer_product(
                 msa = msa,
@@ -286,11 +285,13 @@ class MSAPairformer(Module):
             s_max = 2,
         ),
         contact_layer: int = 15,
+        confind_contact_layer: int = 18
     ):
         super().__init__()
         self.dim_pairwise = dim_pairwise
         self.dim_msa = dim_msa
         self.contact_layer = contact_layer
+        self.confind_contact_layer = confind_contact_layer
 
         # Relative position encoding
         self.relative_position_encoding = RelativePositionEncoding(
@@ -322,6 +323,9 @@ class MSAPairformer(Module):
         self.contact_head = LogisticRegressionContactHead(
             dim_pairwise = dim_pairwise,
         )
+        self.confind_contact_head = LogisticRegressionContactHead(
+            dim_pairwise = dim_pairwise
+        )
 
     @property
     def device(self):
@@ -334,18 +338,16 @@ class MSAPairformer(Module):
         cls,
         device: torch.device | None = None,
         weights_dir: str | None = None,
-        load_confind_head: bool = False,
     ):
         if device is None:
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        model = cls()
         path = Path(snapshot_download(repo_id="yakiyama/MSA-Pairformer", cache_dir=weights_dir))
         checkpoint = torch.load(path / "model.bin", weights_only=True, map_location=device)
-        if load_confind_head:
-            contact_checkpoint = torch.load(path / "confind_contact.bin", weights_only=True, map_location=device)
-        else:
-            contact_checkpoint = torch.load(path / "contact.bin", weights_only=True, map_location=device)
-        checkpoint.update(contact_checkpoint)
+        confind_contact_checkpoint = torch.load(path / "confind_contact.bin", weights_only=True, map_location=device)
+        cb_contact_checkpoint = torch.load(path / "contact.bin", weights_only=True, map_location=device)
+        checkpoint.update(confind_contact_checkpoint)
+        checkpoint.update(cb_contact_checkpoint)
+        model = cls()
         model.load_state_dict(checkpoint)
         model.to(device)
         return model
