@@ -1,6 +1,6 @@
 [project]
 name = "msa-pairformer"
-version = "1.0.0"
+version = "1.0.1"
 description = "MSA Pairformer model repository"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -16,7 +16,7 @@ maintainers = [
 
 dependencies = [
     "torch>=2.5.0",
-    "numpy>=2.0",
+    "numpy>=1.26,<2.0",
     "einops>=0.8.0",
     "einx>=0.3.0",
     "jaxtyping>=0.2.38",
