@@ -405,11 +405,13 @@ class MSAPairformer(Module):
         if return_contacts:
             if return_pairwise_repr_layer_idx is None:
                 # return_pairwise_repr_layer_idx = list(np.arange(self.core_stack.depth))
-                return_pairwise_repr_layer_idx = [self.contact_layer]
+                return_pairwise_repr_layer_idx = [self.contact_layer, self.confind_contact_layer]
             elif isinstance(return_pairwise_repr_layer_idx, int):
-                return_pairwise_repr_layer_idx = [return_pairwise_repr_layer_idx, self.contact_layer]
+                return_pairwise_repr_layer_idx = [return_pairwise_repr_layer_idx, self.contact_layer, self.confind_contact_layer]
             elif self.contact_layer not in return_pairwise_repr_layer_idx:
                 return_pairwise_repr_layer_idx.append(self.contact_layer)
+            if self.confind_contact_layer not in return_pairwise_repr_layer_idx:
+                return_pairwise_repr_layer_idx.append(self.confind_contact_layer)
 
         # Initialize representations
         msa, pairwise_repr = self.init_representations(msa, complex_chain_break_indices)
@@ -440,11 +442,53 @@ class MSAPairformer(Module):
         # Predict contacts
         if return_contacts:
             contacts = self.contact_head(results['pairwise_repr_d'][f'layer_{self.contact_layer}'].to(self.device))
-            results['predicted_contacts'] = contacts
+            results['predicted_cb_contacts'] = contacts
+            confind_contacts = self.confind_contact_head(results['pairwise_repr_d'][f'layer_{self.confind_contact_layer}'].to(self.device))
+            results['predicted_confind_contacts'] = confind_contacts
         return results
 
     ###### Contact prediction ######
     def predict_contacts(
+        self,
+        msa: Float['b s n d'],
+        mask: Bool['b n'] | None = None,
+        msa_mask: Bool['b s'] | None = None,
+        full_mask: Bool['b s n'] | None = None,
+        pairwise_mask: Bool['b n n'] | None = None,
+        seq_weights: Float['b s'] | None = None,
+        seq_weights_dict: dict = {},
+        complex_chain_break_indices: List[int] | None = None,
+        return_seq_weights: bool = False,
+    ):
+        # Initialize representations
+        msa, pairwise_repr = self.init_representations(msa, complex_chain_break_indices)
+        # Pass through layers
+        results = self.core_stack(
+            pairwise_repr = pairwise_repr,
+            msa = msa,
+            mask = mask,
+            msa_mask = msa_mask,
+            full_mask = full_mask,
+            pairwise_mask = pairwise_mask,
+            seq_weights = seq_weights,
+            seq_weights_dict = seq_weights_dict,
+            query_only = True,
+            return_repr_after_layer_idx = [self.contact_layer, self.confind_contact_layer],
+            return_pairwise_repr_layer_idx = [self.confind_contact_layer],
+            return_seq_weights = return_seq_weights,
+        )
+
+        # Predict contacts
+        cb_contacts = self.contact_head(results['pairwise_repr_d'][f'layer_{self.contact_layer}'].to(self.device))
+        confind_contacts = self.confind_contact_head(results['pairwise_repr_d'][f'layer_{self.confind_contact_layer}'].to(self.device))
+        res = {}
+        res['predicted_cb_contacts'] = cb_contacts
+        res['predicted_confind_contacts'] = confind_contacts
+        if return_seq_weights:
+            res['seq_weights_list_d'] = results['seq_weights_list_d']
+        return res
+
+    def predict_cb_contacts(
         self,
         msa: Float['b s n d'],
         mask: Bool['b n'] | None = None,
@@ -477,7 +521,46 @@ class MSAPairformer(Module):
         # Predict contacts
         contacts = self.contact_head(results['pairwise_repr_d'][f'layer_{self.contact_layer}'].to(self.device))
         res = {}
-        res['predicted_contacts'] = contacts
+        res['predicted_cb_contacts'] = contacts
+        if return_seq_weights:
+            res['seq_weights_list_d'] = results['seq_weights_list_d']
+
+        return res
+
+    def predict_confind_contacts(
+        self,
+        msa: Float['b s n d'],
+        mask: Bool['b n'] | None = None,
+        msa_mask: Bool['b s'] | None = None,
+        full_mask: Bool['b s n'] | None = None,
+        pairwise_mask: Bool['b n n'] | None = None,
+        seq_weights: Float['b s'] | None = None,
+        seq_weights_dict: dict = {},
+        complex_chain_break_indices: List[int] | None = None,
+        return_seq_weights: bool = False,
+    ):
+        # Initialize representations
+        msa, pairwise_repr = self.init_representations(msa, complex_chain_break_indices)
+        # Pass through layers
+        results = self.core_stack(
+            pairwise_repr = pairwise_repr,
+            msa = msa,
+            mask = mask,
+            msa_mask = msa_mask,
+            full_mask = full_mask,
+            pairwise_mask = pairwise_mask,
+            seq_weights = seq_weights,
+            seq_weights_dict = seq_weights_dict,
+            query_only = True,
+            return_repr_after_layer_idx = [self.confind_contact_layer],
+            return_pairwise_repr_layer_idx = [self.confind_contact_layer],
+            return_seq_weights = return_seq_weights,
+        )
+
+        # Predict contacts
+        contacts = self.confind_contact_head(results['pairwise_repr_d'][f'layer_{self.confind_contact_layer}'].to(self.device))
+        res = {}
+        res['predicted_confind_contacts'] = contacts
         if return_seq_weights:
             res['seq_weights_list_d'] = results['seq_weights_list_d']
 
