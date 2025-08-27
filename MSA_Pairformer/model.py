@@ -144,7 +144,7 @@ class CoreModule(Module):
         full_mask: Bool['b s n'] | None = None,
         pairwise_mask: Bool['b n n'] | None = None,
         seq_weights: Float['b s'] | None = None,
-        seq_weights_dict: dict = {},
+        seq_weights_dict: dict = None,
         query_only: bool = True,
         return_msa_repr_layer_idx: List[int] | int | None = None,
         return_pairwise_repr_layer_idx: List[int] | int | None = None,
