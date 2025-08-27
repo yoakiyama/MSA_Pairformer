@@ -404,7 +404,6 @@ class MSAPairformer(Module):
         # Ensure that contact layer is in return_pairwise_repr_layer_idx if returning contacts
         if return_contacts:
             if return_pairwise_repr_layer_idx is None:
-                # return_pairwise_repr_layer_idx = list(np.arange(self.core_stack.depth))
                 return_pairwise_repr_layer_idx = [self.contact_layer, self.confind_contact_layer]
             elif isinstance(return_pairwise_repr_layer_idx, int):
                 return_pairwise_repr_layer_idx = [return_pairwise_repr_layer_idx, self.contact_layer, self.confind_contact_layer]
