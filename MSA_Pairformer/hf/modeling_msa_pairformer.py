@@ -661,20 +661,17 @@ class MsaPairformerEncoder(nn.Module):
         seq_weights: Float['b s'] | None = None,
         return_seq_weights: bool = False,
         return_query_only: bool = True,
-        return_msa_repr_layer_idx: list[int] | int | None = None,
-        return_pairwise_repr_layer_idx: list[int] | int | None = None,
+        return_msa_repr_layer_idx: list[int] | None = None,
+        return_pairwise_repr_layer_idx: list[int] | None = None,
     ) -> dict[str, dict[str, torch.Tensor] | torch.Tensor]:
-        # Track seq weights, pairwise representations, and MSA representations for specified layers
-        # seq weights are tracked throughout all layers
+        # Track seq weights for all layers
         seq_weights_list_d = {}
-        pairwise_repr_d = {}
+        # Track MSA and pairwise representations for specified layers
         msa_repr_d = {}
+        pairwise_repr_d = {}
 
-        # Turn return layer indices into lists
-        if isinstance(return_msa_repr_layer_idx, int):
-            return_msa_repr_layer_idx = [return_msa_repr_layer_idx]
-        if isinstance(return_pairwise_repr_layer_idx, int):
-            return_pairwise_repr_layer_idx = [return_pairwise_repr_layer_idx]
+        return_msa_repr_layer_idx = return_msa_repr_layer_idx or []
+        return_pairwise_repr_layer_idx = return_pairwise_repr_layer_idx or []
 
         # Pass MSA through each layer of the core module stack
         for layer_idx, msa_pairformer_layer in enumerate(self.layers):
@@ -690,10 +687,10 @@ class MsaPairformerEncoder(nn.Module):
 
             if return_seq_weights:
                 seq_weights_list_d[f"layer_{layer_idx}"] = normalized_sequence_weights
-            if return_pairwise_repr_layer_idx is None or layer_idx in return_pairwise_repr_layer_idx:
-                pairwise_repr_d[f"layer_{layer_idx}"] = pairwise_repr
-            if return_msa_repr_layer_idx is None or layer_idx in return_msa_repr_layer_idx:
-                msa_repr_d[f"layer_{layer_idx}"] = msa_repr[:, :1, :, :] if return_query_only else msa_repr
+            if layer_idx in return_msa_repr_layer_idx:
+                msa_repr_d[f"layer_{layer_idx}"] = msa_repr[:, :1, :, :].cpu() if return_query_only else msa_repr.cpu()
+            if layer_idx in return_pairwise_repr_layer_idx:
+                pairwise_repr_d[f"layer_{layer_idx}"] = pairwise_repr.cpu()
 
         # Final MSA update
         if self.final_msa_block is not None:
@@ -702,15 +699,14 @@ class MsaPairformerEncoder(nn.Module):
                 pairwise_repr=pairwise_repr,
                 residue_mask=residue_mask
             )
-            final_layer_idx = self.config.depth + 1
-            if return_msa_repr_layer_idx is not None and final_layer_idx in return_msa_repr_layer_idx:
-                msa_repr_d[f"layer_{final_layer_idx + 1}"] = msa_repr[:, :1, :, :] if return_query_only else msa_repr
+            final_idx = self.config.depth + 1
+            if final_idx in return_msa_repr_layer_idx:
+                msa_repr_d[f"layer_{final_idx}"] = msa_repr[:, :1, :, :].cpu() if return_query_only else msa_repr.cpu()
 
         # Organize results
         results = {}
         results['final_msa_repr'] = msa_repr[:, :1, :, :] if return_query_only else msa_repr
         results['final_pairwise_repr'] = pairwise_repr
-
         results['seq_weights_list_d'] = seq_weights_list_d
         results['pairwise_repr_d'] = pairwise_repr_d
         results['msa_repr_d'] = msa_repr_d
@@ -891,18 +887,21 @@ class MsaPairformer(MsaPairformerPreTrainedModel):
         return_query_only = default(return_query_only, self.config.return_query_only)
         return_contacts = default(return_contacts, self.config.return_contacts)
         return_seq_weights = default(return_seq_weights, self.config.return_seq_weights)
+
         return_msa_repr_layer_idx = default(return_msa_repr_layer_idx, self.config.return_msa_repr_layer_idx)
+        return_msa_repr_layer_idx = default(return_msa_repr_layer_idx, [])
+        if isinstance(return_msa_repr_layer_idx, int):
+            return_msa_repr_layer_idx = [return_msa_repr_layer_idx]
+
         return_pairwise_repr_layer_idx = default(return_pairwise_repr_layer_idx,
                                                  self.config.return_pairwise_repr_layer_idx)
+        return_pairwise_repr_layer_idx = default(return_pairwise_repr_layer_idx, [])
+        if isinstance(return_pairwise_repr_layer_idx, int):
+            return_pairwise_repr_layer_idx = [return_pairwise_repr_layer_idx]
 
         # Ensure that contact layer is in return_pairwise_repr_layer_idx if returning contacts
-        if return_contacts:
-            if return_pairwise_repr_layer_idx is None:
-                return_pairwise_repr_layer_idx = list(range(self.config.depth))
-            elif isinstance(return_pairwise_repr_layer_idx, int):
-                return_pairwise_repr_layer_idx = [return_pairwise_repr_layer_idx, self.config.contact_layer]
-            elif self.config.contact_layer not in return_pairwise_repr_layer_idx:
-                return_pairwise_repr_layer_idx.append(self.config.contact_layer)
+        if return_contacts and self.config.contact_layer not in return_pairwise_repr_layer_idx:
+            return_pairwise_repr_layer_idx.append(self.config.contact_layer)
 
         # Pass through layers
         results = self.encoder.forward(
@@ -946,7 +945,7 @@ class MsaPairformer(MsaPairformerPreTrainedModel):
         >>> from MSA_Pairformer.hf.modeling_msa_pairformer import MsaPairformer
 
         >>> esm = EsmModel.from_pretrained('facebook/esm2_t33_650M_UR50D')
-        >>> msa_pairformer = MsaPairformer.from_pretrained('mauricebrenner/msa_pairformer')
+        >>> msa_pairformer = MsaPairformer.from_pretrained('yoakiyama/MSA-Pairformer', revision='refs/pr/1')
 
         >>> msa: Float['b s n']  # MSA (batch size, number of sequences, sequence length)
         >>> query_sequence = msa[:, 0, :]
