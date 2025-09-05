@@ -17,7 +17,7 @@ def copy_msa_block(
     msa_block: hf.MsaBlock
 ) -> None:
     # Deepcopy to prevent RuntimeError: The weights trying to be saved contained shared tensors
-    new_msa_pwa: hf.MsaPairWeightedAveraging = msa_block.msa_pair_weighted_averaging
+    new_msa_pwa: hf.MsaPairWeightedAveraging = msa_block.msa_pwa
 
     new_msa_pwa.msa_repr_to_values_and_gates.pre_norm = deepcopy(og_msa_pwa.msa_to_values_and_gates[0])
     new_msa_pwa.msa_repr_to_values_and_gates.linear_no_bias = deepcopy(og_msa_pwa.msa_to_values_and_gates[1])
@@ -134,7 +134,6 @@ if __name__ == '__main__':
 
     pretrained_model_msa_pairformer.push_to_hub(
         repo_id='yoakiyama/MSA-Pairformer',
-        commit_message='Updating commit 420a3b02486be6c04906267b89b6763214d10ce6 for use with '
-                       'HuggingFace PreTrainedModel',
+        commit_message='Rename msa_pair_weighted_averaging to msa_pwa (https://github.com/huggingface/peft/issues/2772)',
         revision='refs/pr/1'
     )

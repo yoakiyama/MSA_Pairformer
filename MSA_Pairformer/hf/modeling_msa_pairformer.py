@@ -281,7 +281,7 @@ class MsaBlock(nn.Module):
 
     def __init__(self, config: MsaPairformerConfig):
         super().__init__()
-        self.msa_pair_weighted_averaging = MsaPairWeightedAveraging(config)
+        self.msa_pwa = MsaPairWeightedAveraging(config)
         self.msa_transition = Transition(config, dim=config.dim_msa)
 
     def forward(
@@ -290,7 +290,7 @@ class MsaBlock(nn.Module):
         pairwise_repr: Float['b n n dp'],
         residue_mask: Bool['b n'],
     ) -> Float['b s n dm']:
-        msa_residual = self.msa_pair_weighted_averaging(
+        msa_residual = self.msa_pwa(
             msa_repr=msa_repr,
             pairwise_repr=pairwise_repr,
             residue_mask=residue_mask
