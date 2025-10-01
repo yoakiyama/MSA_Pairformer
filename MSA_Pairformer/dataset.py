@@ -529,10 +529,13 @@ class CollateAFBatch():
         masked_msas_onehot = one_hot(masked_msas, num_classes = nTokenTypes)
         output_dict['msas_onehot'] = masked_msas_onehot
         if self.query_only:
-            _, _, n_pos = msas.shape
-            batch_idx, seq_idx, pos_idx = np.unravel_index(mlm_indices, msas.shape)
-            query_only_pos_idx = pos_idx + batch_idx * n_pos
-            output_dict['masked_idx'] = query_only_pos_idx
+            if mlm_indices is None:
+                output_dict['masked_idx'] = None
+            else:
+                _, _, n_pos = msas.shape
+                batch_idx, seq_idx, pos_idx = np.unravel_index(mlm_indices, msas.shape)
+                query_only_pos_idx = pos_idx + batch_idx * n_pos
+                output_dict['masked_idx'] = query_only_pos_idx
         else:
             output_dict['masked_idx'] = mlm_indices
         output_dict['unmasked_msas_onehot'] = one_hot(msas, num_classes = nTokenTypes)
