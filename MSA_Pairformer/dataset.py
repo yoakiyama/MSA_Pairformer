@@ -18,6 +18,7 @@ from scipy.spatial.distance import cdist
 import torch
 from torch.utils.data import Dataset
 from torch.nn.functional import one_hot
+from copy import deepcopy
 
 # Amino acid code to character
 code2aa_d = {
@@ -349,7 +350,9 @@ class MSADataset(Dataset):
         min_depth = 4,
         transform = None,
         random_query: bool = False,
-        min_query_coverage: float = 0.8
+        min_query_coverage: float = 0.8,
+        hhfilter_kwargs: dict = {},
+        secondary_filter_method: str = "greedy"
     ):
         """
         data_dir is the parent directory that stores all of the MSA .a3m files
@@ -364,6 +367,8 @@ class MSADataset(Dataset):
         self.min_depth = min_depth
         self.random_query = random_query
         self.min_query_coverage = min_query_coverage
+        self.hhfilter_kwargs = hhfilter_kwargs
+        self.secondary_filter_method = secondary_filter_method
         if msa_paths is None:
             self.msa_paths = glob(os.path.join(msa_dir, "*/a3m/*.a3m"))
         else:
@@ -384,7 +389,9 @@ class MSADataset(Dataset):
             max_tokens = self.max_tokens,
             diverse_select_method = "hhfilter",
             random_query = self.random_query,
-            min_query_coverage = self.min_query_coverage    
+            min_query_coverage = self.min_query_coverage,
+            hhfilter_kwargs = self.hhfilter_kwargs,
+            secondary_filter_method = self.secondary_filter_method
         )
         # Get tokenized MSA
         res_d['tokenized_msa'] = msa.diverse_tokenized_msa
@@ -392,6 +399,8 @@ class MSADataset(Dataset):
         res_d['n_diverse_seqs'] = msa.n_diverse_seqs
         # Add file path
         res_d['file_path'] = msa_path
+        # Add sequence indices
+        res_d['seq_indices'] = msa.select_diverse_indices
         return res_d     
 
 def msa_mlm(
@@ -507,17 +516,26 @@ class CollateAFBatch():
         output_dict['msas'] = msas
     
         # Create masked input
-        masked_msas, mlm_indices = msa_mlm(msas, mask_tok=self.mask_tok, pad_tok=self.pad_tok, mask_prob=self.mask_prob, mask_ratio=self.mask_ratio, 
-                                           mutate_ratio=self.mutate_ratio, keep_ratio=self.keep_ratio, mutate_tok_low=self.tok_low, 
-                                           mutate_tok_high=self.tok_high, query_only=self.query_only, mutate_pssm=self.mutate_pssm)
+        if self.mask_prob > 0:
+            masked_msas, mlm_indices = msa_mlm(
+                msas, mask_tok=self.mask_tok, pad_tok=self.pad_tok, mask_prob=self.mask_prob, mask_ratio=self.mask_ratio, 
+                mutate_ratio=self.mutate_ratio, keep_ratio=self.keep_ratio, mutate_tok_low=self.tok_low, 
+                mutate_tok_high=self.tok_high, query_only=self.query_only, mutate_pssm=self.mutate_pssm
+            )
+        else:
+            masked_msas = deepcopy(msas)
+            mlm_indices = None
         # One-hot encode masked/mutated MSA
         masked_msas_onehot = one_hot(masked_msas, num_classes = nTokenTypes)
         output_dict['msas_onehot'] = masked_msas_onehot
         if self.query_only:
-            _, _, n_pos = msas.shape
-            batch_idx, seq_idx, pos_idx = np.unravel_index(mlm_indices, msas.shape)
-            query_only_pos_idx = pos_idx + batch_idx * n_pos
-            output_dict['masked_idx'] = query_only_pos_idx
+            if mlm_indices is None:
+                output_dict['masked_idx'] = None
+            else:
+                _, _, n_pos = msas.shape
+                batch_idx, seq_idx, pos_idx = np.unravel_index(mlm_indices, msas.shape)
+                query_only_pos_idx = pos_idx + batch_idx * n_pos
+                output_dict['masked_idx'] = query_only_pos_idx
         else:
             output_dict['masked_idx'] = mlm_indices
         output_dict['unmasked_msas_onehot'] = one_hot(msas, num_classes = nTokenTypes)
@@ -527,6 +545,8 @@ class CollateAFBatch():
         output_dict['molecule_feats'] = molecule_feats
         # Store file path
         output_dict['file_path'] = [batch[i]['file_path'] for i in range(og_batch_size) if valid_msa[i]]
+        # Store sequence indices
+        output_dict['seq_indices'] = [batch[i]['seq_indices'] for i in range(og_batch_size) if valid_msa[i]]
         # Store MSA depth
         output_dict['msa_depths'] = torch.tensor([batch[i]['n_diverse_seqs'] for i in range(og_batch_size) if valid_msa[i]])
         # Prepare masks
@@ -606,7 +626,9 @@ class trRosettaContactMSADataset(Dataset):
         min_msa_depth: int = 8,
         max_tokens: int = 2**17,
         random_query: bool = False,
-        min_query_coverage: float = 0.9
+        min_query_coverage: float = 0.9,
+        hhfilter_kwargs: dict = {},
+        secondary_filter_method: str = "greedy"
     ):
         self.paired_paths_l = paired_paths_l
         self.max_seq_length = max_seq_length
@@ -614,6 +636,8 @@ class trRosettaContactMSADataset(Dataset):
         self.max_tokens = max_tokens
         self.random_query = random_query
         self.min_query_coverage = min_query_coverage
+        self.hhfilter_kwargs = hhfilter_kwargs
+        self.secondary_filter_method = secondary_filter_method
 
     def __len__(self):
         return len(self.paired_paths_l)
