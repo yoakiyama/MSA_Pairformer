@@ -61,8 +61,11 @@ def _setup_tools():
 ### Getting started with MSA Pairformer <a name="getting-started"></a>
 The model's weights can be downloaded from Huggingface under [HuggingFace/yakiyama/MSA-Pairformer](https://huggingface.co/yakiyama/MSA-Pairformer/).
 ```py
+import torch
+import numpy as np
 from huggingface_hub import login
 from MSA_Pairformer.model import MSAPairformer
+from MSA_Pairformer.dataset import MSA, prepare_msa_masks
 
 # Use the GPU if available
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -86,7 +89,7 @@ Here, we walk through how to run MSA Pairformer on the phenylalanyl tRNA synthet
 ```py
 # Subsample MSA using hhfilter and greedy diversification
 msa_file = "data/1B70_A_1B70_B.fas"
-msa_depth = 512
+max_msa_depth = 512
 max_length = 10240
 chain_break_idx = 265
 np.random.seed(42)
@@ -94,7 +97,7 @@ msa_obj = MSA(
     msa_file_path=msa_file,
     max_seqs=max_msa_depth,
     max_length=max_length,
-    max_tokens=1e12,
+    max_tokens=np.inf,
     diverse_select_method="hhfilter",
     hhfilter_kwargs={"binary": "hhfilter"}
 )
