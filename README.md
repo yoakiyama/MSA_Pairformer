@@ -37,6 +37,9 @@ We use hhfilter (part of hhsuite) as the default option for subsampling MSAs. To
 ```
 curl -fsSL https://github.com/soedinglab/hh-suite/releases/download/v3.3.0/hhsuite-3.3.0-SSE2-Linux.tar.gz
 tar xz -C hhsuite
+export PATH="$PATH:/path/to/hhsuite/bin:/path/to/hhsuite/scripts"
+```
+Alternatively, in python:
 ```
 def _setup_tools():
   """Download and compile C++ tools."""
@@ -48,11 +51,12 @@ def _setup_tools():
       os.makedirs(hhsuite_path, exist_ok=True)
       url = "https://github.com/soedinglab/hh-suite/releases/download/v3.3.0/hhsuite-3.3.0-SSE2-Linux.tar.gz"
       os.system(f"curl -fsSL {url} | tar xz -C {hhsuite_path}/")
+  os.environ['PATH'] += f":{hhsuite_path}/bin:{hhsuite_path}/scripts"
 ```
 
 ## MSA Pairformer <a name="MSA-Pairformer"></a>
 
-[MSA Pairformer](https://www.biorxiv.org/content/10.1101/2025.08.02.668173v1) extracts evolutionary signals most relevant to a query sequence from a set of aligned homologous sequences. Using only 111M parameters, it can easily run on consumer-grade hardware (e.g. NVIDIA RTX 4090) and achieve state-of-the-art performance. In this repository, we provide training code and Google Colab notebooks to reproduce the results in the pre-print. We are excited to deliver this tool to the research community and to see all of its applications to real-world biological challenges.
+[MSA Pairformer](https://www.biorxiv.org/content/10.1101/2025.08.02.668173v1) extracts evolutionary signals most relevant to a query sequence from a set of aligned homologous sequences. In this repository, we provide training code and Google Colab notebooks to reproduce the results in the pre-print. We are excited to deliver this tool to the research community and to see all of its applications to real-world biological challenges.
 
 ### Getting started with MSA Pairformer <a name="getting-started"></a>
 The model's weights can be downloaded from Huggingface under [HuggingFace/yakiyama/MSA-Pairformer](https://huggingface.co/yakiyama/MSA-Pairformer/).
@@ -76,42 +80,69 @@ model = MSAPairformer.from_pretrained(device=device)
 # Once you run this code once, you can re-run and it will automatically load the weights
 save_model_dir = "model_weights"
 model = MSAPairformer.from_pretrained(weights_dir=save_model_dir, device=device)
+```
 
+Here, we walk through how to run MSA Pairformer on the phenylalanyl tRNA synthetase pheS and pheT dimer (PDB ID: 1B70).
+```py
 # Subsample MSA using hhfilter and greedy diversification
+msa_file = "data/complexes/1B70_A_1B70_B.fas"
+msa_depth = 512
+max_length = 10240
 np.random.seed(42)
 msa_obj = MSA(
     msa_file_path=msa_file,
     max_seqs=max_msa_depth,
-    max_length=total_length,
+    max_length=max_length,
     max_tokens=1e12,
     diverse_select_method="hhfilter",
     hhfilter_kwargs={"binary": "hhfilter"}
 )
+# Prepare MSA and mask tensors
 msa_tokenized_t = msa_obj.diverse_tokenized_msa
-  msa_onehot_t = torch.nn.functional.one_hot(msa_tokenized_t, num_classes=len(aa2tok_d)).unsqueeze(0).float().to(device)
-  mask, msa_mask, full_mask, pairwise_mask = prepare_msa_masks(msa_obj.diverse_tokenized_msa.unsqueeze(0))
-  mask, msa_mask, full_mask, pairwise_mask = mask.to(device), msa_mask.to(device), full_mask.to(device), pairwise_mask.to(device)
-  
-# Predict contacts and embed query sequence
-results_dict = model.get_embeddings_and_contacts()
+msa_onehot_t = torch.nn.functional.one_hot(msa_tokenized_t, num_classes=len(aa2tok_d)).unsqueeze(0).float().to(device)
+mask, msa_mask, full_mask, pairwise_mask = prepare_msa_masks(msa_obj.diverse_tokenized_msa.unsqueeze(0))
+mask, msa_mask, full_mask, pairwise_mask = mask.to(device), msa_mask.to(device), full_mask.to(device), pairwise_mask.to(device)
+
+# Run MSA Pairformer to generate embeddings and predict contacts
 with torch.no_grad():
-  with torch.amp.autocast(dtype=torch.bfloat16, device_type="cuda"):
-      res = global_model(  # Use the pre-loaded global model
-          msa=msa_onehot_t.to(torch.bfloat16),
-          mask=mask,
-          msa_mask=msa_mask,
-          full_mask=full_mask,
-          pairwise_mask=pairwise_mask,
-          complex_chain_break_indices=[breaks],
-          return_seq_weights=True,
-          return_pairwise_repr_layer_idx=None,
-          return_msa_repr_layer_idx=None
-      )
+    with torch.amp.autocast(dtype=torch.bfloat16, device_type="cuda"):
+        res = global_model(
+            msa=msa_onehot_t.to(torch.bfloat16),
+            mask=mask,
+            msa_mask=msa_mask,
+            full_mask=full_mask,
+            pairwise_mask=pairwise_mask,
+            complex_chain_break_indices=[[chain_break_idx]],
+            return_seq_weights=True,
+            return_pairwise_repr_layer_idx=None,
+            return_msa_repr_layer_idx=None
+        )
+# res is a dictionary with the following keys: final_msa_repr, final_pairwise_repr, msa_repr_d, pairwise_repr_d, seq_weights_list_d, predicted_cb_contacts, predicted_confind_contacts
 
-  results.keys()
-  # res is a dictionary with the following keys: final_msa_repr, final_pairwise_repr, msa_repr_d, pairwise_repr_d, seq_weights_list_d, logits, contacts, total_length, max_msa_depth, weight_scale
-
-
+# Just predict Cb-Cb
+with torch.no_grad():
+    with torch.amp.autocast(dtype=torch.bfloat16, device_type="cuda"):
+        res = global_model.predict_cb_contacts(
+            msa=msa_onehot_t.to(torch.bfloat16),
+            mask=mask,
+            msa_mask=msa_mask,
+            full_mask=full_mask,
+            pairwise_mask=pairwise_mask,
+            complex_chain_break_indices=[[chain_break_idx]],
+            return_seq_weights=True,
+        )
+# Just predict ConFind contacts
+with torch.no_grad():
+    with torch.amp.autocast(dtype=torch.bfloat16, device_type="cuda"):
+        res = global_model.predict_confind_contacts(
+            msa=msa_onehot_t.to(torch.bfloat16),
+            mask=mask,
+            msa_mask=msa_mask,
+            full_mask=full_mask,
+            pairwise_mask=pairwise_mask,
+            complex_chain_break_indices=[[chain_break_idx]],
+            return_seq_weights=True,
+        )
 ```
 
 That's it -- you've generated embeddings and predicted contacts using MSA Pairformer!
