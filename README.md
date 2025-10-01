@@ -85,9 +85,10 @@ model = MSAPairformer.from_pretrained(weights_dir=save_model_dir, device=device)
 Here, we walk through how to run MSA Pairformer on the phenylalanyl tRNA synthetase pheS and pheT dimer (PDB ID: 1B70).
 ```py
 # Subsample MSA using hhfilter and greedy diversification
-msa_file = "data/complexes/1B70_A_1B70_B.fas"
+msa_file = "data/1B70_A_1B70_B.fas"
 msa_depth = 512
 max_length = 10240
+chain_break_idx = 265
 np.random.seed(42)
 msa_obj = MSA(
     msa_file_path=msa_file,
@@ -106,7 +107,7 @@ mask, msa_mask, full_mask, pairwise_mask = mask.to(device), msa_mask.to(device),
 # Run MSA Pairformer to generate embeddings and predict contacts
 with torch.no_grad():
     with torch.amp.autocast(dtype=torch.bfloat16, device_type="cuda"):
-        res = global_model(
+        res = model(
             msa=msa_onehot_t.to(torch.bfloat16),
             mask=mask,
             msa_mask=msa_mask,
@@ -122,7 +123,7 @@ with torch.no_grad():
 # Just predict Cb-Cb
 with torch.no_grad():
     with torch.amp.autocast(dtype=torch.bfloat16, device_type="cuda"):
-        res = global_model.predict_cb_contacts(
+        res = model.predict_cb_contacts(
             msa=msa_onehot_t.to(torch.bfloat16),
             mask=mask,
             msa_mask=msa_mask,
@@ -134,7 +135,7 @@ with torch.no_grad():
 # Just predict ConFind contacts
 with torch.no_grad():
     with torch.amp.autocast(dtype=torch.bfloat16, device_type="cuda"):
-        res = global_model.predict_confind_contacts(
+        res = model.predict_confind_contacts(
             msa=msa_onehot_t.to(torch.bfloat16),
             mask=mask,
             msa_mask=msa_mask,
