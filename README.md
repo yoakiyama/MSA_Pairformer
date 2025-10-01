@@ -1,4 +1,4 @@
-# MSA Pairformer (under construction will update soon)
+# MSA Pairformer
 <!-- ![Logo](msa_pairformer_logo.png) -->
 <div align="left">
   <img src="msa_pairformer_logo.png" width="300" alt="Neural Network Logo">
