@@ -277,7 +277,6 @@ class MSA_processing:
         remove_sequences_with_indeterminate_AA_in_focus_cols=True,
         weights_calc_method="eve",
         num_cpus=1,
-        skip_one_hot_encodings=False,
         ):
         
         """
@@ -302,8 +301,6 @@ class MSA_processing:
         - remove_sequences_with_indeterminate_AA_in_focus_cols: (bool) Remove all sequences that have indeterminate AA (e.g., B, J, X, Z) at focus positions of the wild type
         - weights_calc_method: (str) Method to use for calculating sequence weights. Options: "eve" or "identity". (default "eve")
         - num_cpus: (int) Number of CPUs to use for parallel weights calculation processing. If set to -1, all available CPUs are used. If set to 1, weights are computed in serial.
-        - skip_one_hot_encodings: (bool) If True, only use this class to calculate weights. Skip the one-hot encodings (which can be very memory/compute intensive)
-            and don't calculate all singles.
         """
         np.random.seed(2021)
         self.MSA_location = MSA_location
@@ -316,7 +313,6 @@ class MSA_processing:
         self.threshold_focus_cols_frac_gaps = threshold_focus_cols_frac_gaps
         self.remove_sequences_with_indeterminate_AA_in_focus_cols = remove_sequences_with_indeterminate_AA_in_focus_cols
         self.weights_calc_method = weights_calc_method
-        self.skip_one_hot_encodings = skip_one_hot_encodings
 
         # Defined by gen_alignment
         self.aa_dict = {}
@@ -331,15 +327,13 @@ class MSA_processing:
         self.gen_alignment()
 
         # Note: One-hot encodings might take up huge amounts of memory, and this could be skipped in many use cases
-        if not self.skip_one_hot_encodings:
-            #print("One-hot encoding sequences")
-            self.one_hot_encoding = one_hot_3D(
-                seq_keys=self.seq_name_to_sequence.keys(),  # Note: Dicts are unordered for python < 3.6
-                seq_name_to_sequence=self.seq_name_to_sequence,
-                alphabet=self.alphabet,
-                seq_length=self.seq_len,
-            )
-            print ("Data Shape =", self.one_hot_encoding.shape)
+        self.one_hot_encoding = one_hot_3D(
+            seq_keys=self.seq_name_to_sequence.keys(),  # Note: Dicts are unordered for python < 3.6
+            seq_name_to_sequence=self.seq_name_to_sequence,
+            alphabet=self.alphabet,
+            seq_length=self.seq_len,
+        )
+        print ("Data Shape =", self.one_hot_encoding.shape)
             
         self.calc_weights(num_cpus=num_cpus, method=weights_calc_method)
 
@@ -529,7 +523,7 @@ def process_msa(
     filename: str,
     weight_filename: str,
     filter_msa: bool,
-    path_to_hhfilter: str,
+    hhfilter_bin: str,
     hhfilter_min_cov=75,
     hhfilter_max_seq_id=100,
     hhfilter_min_seq_id=0,
@@ -555,8 +549,8 @@ def process_msa(
             'hhfiltered',
             f"{msa_name}_hhfiltered_cov_{str(hhfilter_min_cov)}_maxid_{str(hhfilter_max_seq_id)}_minid_{str(hhfilter_min_seq_id)}.a2m"
         )
-        bin_file = os.path.join(path_to_hhfilter, 'bin', 'hhfilter')
-        os.system(f"{bin_file} -cov {str(hhfilter_min_cov)} -id {str(hhfilter_max_seq_id)} -qid {str(hhfilter_min_seq_id)} -i {preprocessed_filename_prefix}_UC.a2m -o {output_filename} -maxseq 10000000")
+        # bin_file = os.path.join(path_to_hhfilter, 'bin', 'hhfilter')
+        os.system(f"{hhfilter_bin} -cov {str(hhfilter_min_cov)} -id {str(hhfilter_max_seq_id)} -qid {str(hhfilter_min_seq_id)} -i {preprocessed_filename_prefix}_UC.a2m -o {output_filename} -maxseq 10000000")
         filename = output_filename
 
     MSA = MSA_processing(
