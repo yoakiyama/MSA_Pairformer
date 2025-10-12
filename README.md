@@ -65,7 +65,7 @@ import torch
 import numpy as np
 from huggingface_hub import login
 from MSA_Pairformer.model import MSAPairformer
-from MSA_Pairformer.dataset import MSA, prepare_msa_masks
+from MSA_Pairformer.dataset import MSA, prepare_msa_masks, aa2tok_d
 
 # Use the GPU if available
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
