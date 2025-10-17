@@ -2,12 +2,14 @@ import torch
 from torch.nn import Module, ModuleList, Sequential
 import numpy as np
 import einx
+import os
 from math import exp
 from functools import partial
 from einops.layers.torch import Rearrange
 from huggingface_hub import snapshot_download
 from pathlib import Path
 from typing import List
+from glob import glob
 
 from MSA_Pairformer.core import LinearNoBias, PreLayerNorm, Transition, exists
 from MSA_Pairformer.outer_product import OuterProduct
@@ -341,10 +343,23 @@ class MSAPairformer(Module):
     ):
         if device is None:
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        path = Path(snapshot_download(repo_id="yakiyama/MSA-Pairformer", cache_dir=weights_dir))
-        checkpoint = torch.load(path / "model.bin", weights_only=True, map_location=device)
-        confind_contact_checkpoint = torch.load(path / "confind_contact.bin", weights_only=True, map_location=device)
-        cb_contact_checkpoint = torch.load(path / "contact.bin", weights_only=True, map_location=device)
+        weights_files_l = glob(os.path.join(weights_dir, "*/snapshots/*/*"))
+        if (
+            any([os.path.basename(p) == "model.bin" for p in weights_files_l]) and 
+            any([os.path.basename(p) == "confind_contact.bin" for p in weights_files_l]) and
+            any([os.path.basename(p) == "contact.bin" for p in weights_files_l])
+        ):
+            main_weights_path = [p for p in weights_files_l if os.path.basename(p) == 'model.bin'][0]
+            checkpoint = torch.load(main_weights_path, weights_only=True, map_location=device)
+            confind_contact_path = [p for p in weights_files_l if os.path.basename(p) == 'confind_contact.bin'][0]
+            confind_contact_checkpoint = torch.load(confind_contact_path, weights_only=True, map_location=device)
+            cb_contact_path = [p for p in weights_files_l  if os.path.basename(p) == 'contact.bin'][0]
+            cb_contact_checkpoint = torch.load(cb_contact_path, weights_only=True, map_location=device)
+        else:
+            path = Path(snapshot_download(repo_id="yakiyama/MSA-Pairformer", cache_dir=weights_dir))
+            checkpoint = torch.load(path / "model.bin", weights_only=True, map_location=device)
+            confind_contact_checkpoint = torch.load(path / "confind_contact.bin", weights_only=True, map_location=device)
+            cb_contact_checkpoint = torch.load(path / "contact.bin", weights_only=True, map_location=device)
         checkpoint.update(confind_contact_checkpoint)
         checkpoint.update(cb_contact_checkpoint)
         model = cls()
