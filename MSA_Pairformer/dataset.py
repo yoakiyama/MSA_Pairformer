@@ -302,7 +302,7 @@ class MSA:
         seq_id: int=90,
         diff: int=0, # Number of sequences
         cov: int=70,
-        qid: int=15,
+        qid: int=30,
         qsc: float=-20.0,
         maxseq: int=None,
         binary="hhfilter",
