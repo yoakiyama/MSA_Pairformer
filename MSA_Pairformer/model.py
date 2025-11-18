@@ -204,7 +204,7 @@ class CoreModule(Module):
                 seq_weights_list_d[f"layer_{layer_idx}"] = norm_weights.cpu()
 
             # Pairwise representation block
-            pairwise_repr = pairwise_block(pairwise_repr = pairwise_repr, mask = mask)
+            pairwise_repr = pairwise_block(pairwise_repr = pairwise_repr, pairwise_mask = pairwise_mask)
             if layer_idx in return_pairwise_repr_layer_idx:
                 pairwise_repr_d[f"layer_{layer_idx}"] = pairwise_repr.cpu()
 
