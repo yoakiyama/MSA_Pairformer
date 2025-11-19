@@ -1,13 +1,13 @@
 [project]
 name = "msa-pairformer"
-version = "1.0.1"
+version = "1.0.2"
 description = "MSA Pairformer model repository"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {file = "LICENSE"}
 
 authors = [
-    {name = "Yo Akiyama"}
+    {name = "Yo Akiyama", email = "yo_aki@mit.edu"}
 ]
 
 maintainers = [
@@ -24,7 +24,11 @@ dependencies = [
     "biopython>=1.85",
     "scipy>=1.8.0",
     "matplotlib>=3.5.1",
-    "scikit-learn>=0.23.2"
+    "scikit-learn>=0.23.2",
+    "cuequivariance_ops_cu12>=0.7.0; sys_platform == 'linux'",
+    "cuequivariance_ops_torch_cu12>=0.7.0; sys_platform == 'linux'",
+    "cuequivariance_torch>=0.7.0; sys_platform == 'linux'",
+    "cuequivariance>=0.7.0; sys_platform == 'linux'"
 ]
 
 [tool.setuptools]

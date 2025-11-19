@@ -14,7 +14,7 @@ from glob import glob
 from MSA_Pairformer.core import LinearNoBias, PreLayerNorm, Transition, exists
 from MSA_Pairformer.outer_product import OuterProduct
 from MSA_Pairformer.regression import LMHead, LogisticRegressionContactHead
-from MSA_Pairformer.pairwise_operations import MSAPairWeightedAveraging, PairwiseBlock
+from MSA_Pairformer.pairwise_operations import MSAPairWeightedAveraging, PairwiseBlock, cuex_is_available
 from MSA_Pairformer.positional_encoding import RelativePositionEncoding
 from MSA_Pairformer.custom_typing import Float, Bool
 
@@ -294,6 +294,12 @@ class MSAPairformer(Module):
         self.dim_msa = dim_msa
         self.contact_layer = contact_layer
         self.confind_contact_layer = confind_contact_layer
+
+        # Check if cuEquivariance is available
+        if cuex_is_available():
+            print("Using cuEquivariance for triangle multiplicative update")
+        else:
+            print("cuEquivariance is not available. Using standard PyTorch implementation for triangle multiplicative update")
 
         # Relative position encoding
         self.relative_position_encoding = RelativePositionEncoding(

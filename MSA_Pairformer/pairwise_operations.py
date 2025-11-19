@@ -13,7 +13,7 @@ from .custom_typing import (
     Bool,
     typecheck
 )
-from .weight_init import _init_ones_, _init_zeros_, lecun_normal_init_
+from MSA_Pairformer.weight_init import _init_ones_, _init_zeros_, lecun_normal_init_
 
 
 # Load environment variables
@@ -31,6 +31,9 @@ try:
         os.environ["CUEQ_DEFAULT_CONFIG"] = _env.str("CUEQ_DEFAULT_CONFIG", default="1")
 except ImportError:
     CUEQUIVARIANCE_AVAILABLE = False
+
+def cuex_is_available():
+    return CUEQUIVARIANCE_AVAILABLE
 
 
 class TriangleMultiplication(Module):
@@ -110,7 +113,6 @@ class TriangleMultiplication(Module):
         pair_rep,
         pairwise_mask=None
     ):
-        print("Using cuEquivariance for triangle multiplicative update")
         return cuex.triangle_multiplicative_update(
             x = pair_rep,
             direction=self.direction,
