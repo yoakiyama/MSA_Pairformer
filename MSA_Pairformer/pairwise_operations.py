@@ -13,8 +13,6 @@ from .custom_typing import (
     Bool,
     typecheck
 )
-from MSA_Pairformer.weight_init import _init_ones_, _init_zeros_, lecun_normal_init_
-
 
 # Load environment variables
 from environs import Env
@@ -72,25 +70,17 @@ class TriangleMultiplication(Module):
 
         # Normalize input
         self.norm_in = nn.LayerNorm(dim_pairwise)
-        _init_ones_(self.norm_in.weight)
-        _init_zeros_(self.norm_in.bias)
 
         # Input projection and gate (left and right combined)
         self.p_in = nn.Linear(dim_pairwise, dim_hidden * 2, bias=use_in_bias)
         self.g_in = nn.Linear(dim_pairwise, dim_hidden * 2, bias=use_in_bias)
-        lecun_normal_init_(self.p_in.weight)
-        lecun_normal_init_(self.g_in.weight)
 
         # Output projection and gate
         self.p_out = nn.Linear(dim_pairwise, dim_pairwise, bias=use_out_bias)
         self.g_out = nn.Linear(dim_pairwise, dim_pairwise, bias=use_out_bias)
-        lecun_normal_init_(self.p_out.weight)
-        lecun_normal_init_(self.g_out.weight)
 
         # Normalize output 
         self.norm_out = nn.LayerNorm(dim_pairwise)
-        _init_ones_(self.norm_out.weight)
-        _init_zeros_(self.norm_out.bias)
 
     def forward(
         self,
