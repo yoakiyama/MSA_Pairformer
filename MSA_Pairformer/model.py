@@ -223,7 +223,7 @@ class CoreModule(Module):
         layer_idx += 1
 
         # Final MSA update
-        if (return_repr_after_layer_idx is None) or (layer_idx == return_repr_after_layer_idx):
+        if (return_repr_after_layer_idx is None) or (layer_idx == len(self.layers)):
             msa_residual = self.final_msa_pwa(
                 msa = msa,
                 pairwise_repr = pairwise_repr,
@@ -645,8 +645,8 @@ class MSAPairformer(Module):
         msa, pairwise_repr = self.init_representations(msa, complex_chain_break_indices)
         # Pass through layers
         results = self.core_stack(
-            pairwise_repr = pairwise_repr,
             msa = msa,
+            pairwise_repr = pairwise_repr,
             mask = mask,
             msa_mask = msa_mask,
             full_mask = full_mask,
