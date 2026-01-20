@@ -493,19 +493,25 @@ class MSAPairformer(Module):
         )
 
         # Get logits via language modeling head
-        if query_only:
-            logits = self.lm_head(results['final_msa_repr'])
+        if store_msa_repr_cpu:
+            logits = self.lm_head(results['final_msa_repr'].to(self.device))
         else:
             logits = self.lm_head(results['final_msa_repr'])
         results['logits'] = logits
 
         # Predict Cb-Cb contacts
         if return_cb_contacts:
-            contacts = self.contact_head(results['pairwise_repr_d'][f'layer_{self.contact_layer}'])
+            if store_pairwise_repr_cpu:
+                contacts = self.contact_head(results['pairwise_repr_d'][f'layer_{self.contact_layer}'].to(self.device))
+            else:
+                contacts = self.contact_head(results['pairwise_repr_d'][f'layer_{self.contact_layer}'])
             results['predicted_cb_contacts'] = contacts
         # Predict ConFind contacts
         if return_confind_contacts:
-            confind_contacts = self.confind_contact_head(results['pairwise_repr_d'][f'layer_{self.confind_contact_layer}'])
+            if store_pairwise_repr_cpu:
+                confind_contacts = self.confind_contact_head(results['pairwise_repr_d'][f'layer_{self.confind_contact_layer}'].to(self.device))
+            else:
+                confind_contacts = self.confind_contact_head(results['pairwise_repr_d'][f'layer_{self.confind_contact_layer}'])
             results['predicted_confind_contacts'] = confind_contacts
         return results
 
