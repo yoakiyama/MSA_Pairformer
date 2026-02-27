@@ -203,18 +203,19 @@ class MSA:
         seq_l = []
         ids_l = []
         valid_indices = None
-        for record in SeqIO.parse(self.msa_file_path, "fasta"):
-            sequence = str(record.seq)
-            if remove_lowercase_cols:
-                if valid_indices is None:
-                    valid_indices = [i for i, aa in enumerate(sequence) if aa.isupper()]
-                sequence = "".join([sequence[i] for i in valid_indices])
-            if not keep_insertions:
-                sequence = re.sub(r"[a-z]|\.|\*", "", sequence)
-            if to_upper:
-                sequence = sequence.upper()
-            seq_l.append(sequence)
-            ids_l.append(record.name)
+        with open(self.msa_file_path, "r") as oFile:
+            for record in SeqIO.parse(oFile, "fasta"):
+                sequence = str(record.seq)
+                if remove_lowercase_cols:
+                    if valid_indices is None:
+                        valid_indices = [i for i, aa in enumerate(sequence) if aa.isupper()]
+                    sequence = "".join([sequence[i] for i in valid_indices])
+                if not keep_insertions:
+                    sequence = re.sub(r"[a-z]|\.|\*", "", sequence)
+                if to_upper:
+                    sequence = sequence.upper()
+                seq_l.append(sequence)
+                ids_l.append(record.name)
         return seq_l, ids_l
 
     @property
