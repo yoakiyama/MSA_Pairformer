@@ -155,6 +155,7 @@ class CoreModule(Module):
         store_pairwise_repr_cpu: bool = True,
         store_msa_repr_cpu: bool = True,
         return_pairwise_repr_only: bool = False,
+        use_checkpointing_triangles: bool = False
     ):
         # Track seq weights, pairwise representations, and MSA representations for specified layers
         # seq weights are tracked throughout all layers
@@ -210,7 +211,7 @@ class CoreModule(Module):
                 seq_weights_list_d[f"layer_{layer_idx}"] = norm_weights.cpu()
 
             # Pairwise representation block
-            pairwise_repr = pairwise_block(pairwise_repr = pairwise_repr, pairwise_mask = pairwise_mask)
+            pairwise_repr = pairwise_block(pairwise_repr = pairwise_repr, pairwise_mask = pairwise_mask, use_checkpointing_triangles = use_checkpointing_triangles)
             if layer_idx in return_pairwise_repr_layer_idx:
                 if store_pairwise_repr_cpu:
                     pairwise_repr_d[f"layer_{layer_idx}"] = pairwise_repr.cpu()
@@ -447,7 +448,8 @@ class MSAPairformer(Module):
         complex_chain_break_indices: List[int] | None = None,
         return_repr_after_layer_idx: int | None = None,
         store_msa_repr_cpu: bool = True,
-        store_pairwise_repr_cpu: bool = True
+        store_pairwise_repr_cpu: bool = True,
+        use_checkpointing_triangles: bool = False
     ):
         # Ensure that contact layer is in return_pairwise_repr_layer_idx if returning contacts
         if return_cb_contacts or return_confind_contacts:
@@ -490,6 +492,7 @@ class MSAPairformer(Module):
             return_repr_after_layer_idx = return_repr_after_layer_idx,
             store_pairwise_repr_cpu = store_pairwise_repr_cpu,
             store_msa_repr_cpu = store_msa_repr_cpu,
+            use_checkpointing_triangles = use_checkpointing_triangles
         )
 
         # Get logits via language modeling head
