@@ -441,11 +441,26 @@ class PairwiseBlock(Module):
     def forward(
         self,
         pairwise_repr: Float["b n n d"],
-        pairwise_mask: Bool["b n"] | None = None
+        pairwise_mask: Bool["b n"] | None = None,
+        use_checkpointing_triangles: bool = False
     ) -> Float["b n n d"]:
         if self.use_triangle_updates:
-            pairwise_repr = self.tri_mult_outgoing(pairwise_repr, pairwise_mask = pairwise_mask) + pairwise_repr
-            pairwise_repr = self.tri_mult_incoming(pairwise_repr, pairwise_mask = pairwise_mask) + pairwise_repr
+            if use_checkpointing_triangles:
+                pairwise_repr = torch.utils.checkpoint.checkpoint(
+                    self.tri_mult_outgoing,
+                    pairwise_repr,
+                    pairwise_mask,
+                    use_reentrant=False
+                ) + pairwise_repr
+                pairwise_repr = torch.utils.checkpoint.checkpoint(
+                    self.tri_mult_incoming,
+                    pairwise_repr,
+                    pairwise_mask,
+                    use_reentrant=False
+                ) + pairwise_repr
+            else:
+                pairwise_repr = self.tri_mult_outgoing(pairwise_repr, pairwise_mask = pairwise_mask) + pairwise_repr
+                pairwise_repr = self.tri_mult_incoming(pairwise_repr, pairwise_mask = pairwise_mask) + pairwise_repr
         if self.use_pair_updates:
             pairwise_repr = self.pair_mult_first(pairwise_repr, pairwise_mask = pairwise_mask) + pairwise_repr
             pairwise_repr = self.pair_mult_second(pairwise_repr, pairwise_mask = pairwise_mask) + pairwise_repr
