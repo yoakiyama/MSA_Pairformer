@@ -373,17 +373,25 @@ class MSAPairWeightedAveraging(Module):
         *,
         msa: Float['b s n d'],
         pairwise_repr: Float['b n n dp'],
-        mask: Bool['b n'] | None = None
+        mask: Bool['b n'] | None = None,
+        pairwise_mask: Bool['b n n'] | None = None,
+        full_mask: Bool['b s n'] | None = None
     ) -> Float['b s n d']:
 
-        values, gates = self.msa_to_values_and_gates(msa)
+        values, gates = self.msa_to_values_and_gates(msa) # b h s n d
         gates = gates.sigmoid()
+        if exists(full_mask):
+            values = values * rearrange(full_mask, 'b s n -> b 1 s n 1')
+            gates = gates * rearrange(full_mask, 'b s n -> b 1 s n 1')
 
         # Project pairwise representation to attention weights
         b = self.pairwise_repr_to_attn(pairwise_repr) # b h i j
-        if exists(mask):
-            mask = rearrange(mask, 'b j -> b 1 1 j')
-            b = b.masked_fill(~mask, max_neg_value(b))
+        if exists(pairwise_mask):
+            pairwise_mask = rearrange(pairwise_mask, 'b i j -> b 1 i j')
+            b = b.masked_fill(~pairwise_mask, max_neg_value(b))
+        # if exists(mask):
+        #     mask = rearrange(mask, 'b j -> b 1 1 j')
+        #     b = b.masked_fill(~mask, max_neg_value(b))
         weights = b.softmax(dim = -1)
 
         # Value vector weighted average

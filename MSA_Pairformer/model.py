@@ -179,7 +179,7 @@ class CoreModule(Module):
             pairwise_block
         ) in enumerate(self.layers):
             # Pair weighted averaging (with residual connection)
-            msa_residual = msa_pair_weighted_avg(msa = msa, pairwise_repr = pairwise_repr, mask = mask)
+            msa_residual = msa_pair_weighted_avg(msa = msa, pairwise_repr = pairwise_repr, mask = mask, full_mask = full_mask, pairwise_mask = pairwise_mask)
             msa = msa + msa_residual
             del msa_residual
             msa = msa + msa_transition(msa)
@@ -228,7 +228,9 @@ class CoreModule(Module):
             msa_residual = self.final_msa_pwa(
                 msa = msa,
                 pairwise_repr = pairwise_repr,
-                mask = mask
+                mask = mask,
+                full_mask = full_mask,
+                pairwise_mask = pairwise_mask
             )
             msa = msa + msa_residual
             del msa_residual
