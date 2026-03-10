@@ -1,9 +1,0 @@
-project:
-  output-dir: _docs
-
-website:
-  title: "DiffPALM"
-  site-url: "https://Bitbol-Lab.github.io/DiffPALM"
-  description: "Differentiable Pairing using Alignment-based Language Models"
-  repo-branch: main
-  repo-url: "https://github.com/Bitbol-Lab/DiffPALM"
