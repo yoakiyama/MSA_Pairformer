@@ -297,6 +297,10 @@ class PresoftmaxDifferentialOuterProductMean(Module):
         if not exists(pairwise_mask):
             pairwise_mask = to_pairwise_mask(mask)
         outer = torch.einsum("... i j d, ... i j -> ... i j d", outer, pairwise_mask)
+        # Readjust based on full mask
+        weighted_mask = seq_weights.unsqueeze(-1) * full_mask.float()
+        pair_denom = torch.einsum("bsi, bsj -> bij", weighted_mask, full_mask.float())
+        outer = outer / (pair_denom.unsqueeze(-1) + self.eps)
         if not self.return_seq_weights:
             del seq_weights
             seq_weights = None
