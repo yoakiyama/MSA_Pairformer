@@ -400,7 +400,10 @@ class MSAPairWeightedAveraging(Module):
         out = out * gates
 
         # Combine heads and project to output dimension
-        return self.to_out(out)
+        out_proj = self.to_out(out) # b s n d
+        if exists(full_mask):
+            out_proj = out_proj * rearrange(full_mask, 'b s n -> b s n 1')
+        return out_proj
 
 class PairwiseBlock(Module):
     """
