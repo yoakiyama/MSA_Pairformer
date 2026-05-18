@@ -611,6 +611,7 @@ class MSAPairformer(Module):
         seq_weights_dict: dict = {},
         complex_chain_break_indices: List[int] | None = None,
         return_seq_weights: bool = False,
+        store_pairwise_repr_cpu: bool = False,
     ):
         # Initialize representations
         msa, pairwise_repr = self.init_representations(msa, complex_chain_break_indices)
@@ -628,6 +629,8 @@ class MSAPairformer(Module):
             return_repr_after_layer_idx = self.confind_contact_layer,
             return_pairwise_repr_layer_idx = [self.confind_contact_layer],
             return_seq_weights = return_seq_weights,
+            store_pairwise_repr_cpu = store_pairwise_repr_cpu,
+            store_msa_repr_cpu = False,
         )
 
         # Predict contacts
