@@ -31,7 +31,7 @@ torch.set_float32_matmul_precision('high')
 print(f"Using device: {torch.cuda.get_device_name(device)}")
 
 # File paths
-parde_alignment_path = "../../data/Figure3_toxin_antitoxin/ParDE_hhfilter.a3m"
+parde_alignment_path = "../../data/Figure3_toxin_antitoxin/ParD_only_msa.a3m"
 fitness_repA_path = "../../data/Figure3_toxin_antitoxin/Library_fitness_vs_parE3_replicate_A.csv"
 fitness_repB_path = "../../data/Figure3_toxin_antitoxin/Library_fitness_vs_parE3_replicate_B.csv"
 
@@ -52,11 +52,11 @@ def main():
     print("Query sequence:", query_seq)
     pard_seq = "MANVEKMSVAVTPQQAAVMREAVEAGEYATASEIVREAVRDWLAKRELRHDDIRRLRQLWDEGKASGRPEPVDFDALRKEARQKLTEVPPNGR"
     pare_seq = "MAVRLVWSPTAKADLIDIYVMIGSENIRAADRYYDQLEARALQLADQPRMGVRRPDIRPSARMLVEAPFVLLYETVPDTDDGPVEWVEIVRVVDGRRDLNRLF"
-    chain_break_idx = query_seq.index(pare_seq)
-    print(f"ParD sequence: {pard_seq}")
-    print(f"ParE sequence: {pare_seq}")
-    print(f"Chain break index: {chain_break_idx}")
-    assert query_seq[chain_break_idx:] == pare_seq
+    # chain_break_idx = query_seq.index(pare_seq)
+    # print(f"ParD sequence: {pard_seq}")
+    # print(f"ParE sequence: {pare_seq}")
+    # print(f"Chain break index: {chain_break_idx}")
+    # assert query_seq[chain_break_idx:] == pare_seq
 
     mutated_indices_l = [58, 59, 60, 63]
     print(f"Mutated indices: {mutated_indices_l}")
@@ -104,7 +104,7 @@ def main():
                     msa_mask = msa_mask,
                     full_mask = full_mask,
                     pairwise_mask = pairwise_mask,
-                    complex_chain_break_indices = [[chain_break_idx]],
+                    complex_chain_break_indices = None,
                     return_seq_weights = False,
                     return_cb_contacts = False,
                     return_confind_contacts = False
@@ -114,7 +114,7 @@ def main():
         )
         pseudolikelihood_l.append(pseudolikelihood)
         avg_fitness_l.append(np.mean(np.array([rep_a, rep_b])))
-        np.save("results/pseudolikelihood_l.msa_pairformer.qid30_id90.1024.npy", np.array(pseudolikelihood_l))
+        np.save("results/pseudolikelihood_l.msa_pairformer.qid30_id90.1024.pard_only.npy", np.array(pseudolikelihood_l))
 
 if __name__ == "__main__":
     main()
