@@ -3,15 +3,13 @@ import os
 import numpy as np
 import tempfile
 import subprocess
-import pickle
 import einx
 
 from glob import glob
-from typing import List, Any, Union, Tuple
+from typing import List, Union, Tuple
 from pathlib import Path
 
 from Bio import SeqIO
-from Bio.Seq import Seq
 
 from scipy.spatial.distance import cdist
 

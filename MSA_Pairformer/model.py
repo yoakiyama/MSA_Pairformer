@@ -13,7 +13,7 @@ from glob import glob
 
 from MSA_Pairformer.core import LinearNoBias, PreLayerNorm, Transition, exists
 from MSA_Pairformer.outer_product import OuterProduct
-from MSA_Pairformer.regression import LMHead, LogisticRegressionContactHead
+from MSA_Pairformer.regression import LMHead, LogisticRegressionContactHead, MRFHead
 from MSA_Pairformer.pairwise_operations import MSAPairWeightedAveraging, PairwiseBlock, cuex_is_available
 from MSA_Pairformer.positional_encoding import RelativePositionEncoding
 from MSA_Pairformer.custom_typing import Float, Bool
@@ -53,7 +53,7 @@ class CoreModule(Module):
             tri_mult_dim_hidden = None, # Defaults to pair representation dimension
             use_triangle_updates = True,
             use_pair_updates = False # For ablation study
-        )
+        ),
     ):
         super().__init__()
 
@@ -310,13 +310,15 @@ class MSAPairformer(Module):
             s_max = 2,
         ),
         contact_layer: int = 15,
-        confind_contact_layer: int = 18
+        confind_contact_layer: int = 18,
+        potts_layer_idx: int = 15
     ):
         super().__init__()
         self.dim_pairwise = dim_pairwise
         self.dim_msa = dim_msa
         self.contact_layer = contact_layer
         self.confind_contact_layer = confind_contact_layer
+        self.potts_layer_idx = potts_layer_idx
 
         # Check if cuEquivariance is available
         if cuex_is_available():
@@ -357,6 +359,10 @@ class MSAPairformer(Module):
         self.confind_contact_head = LogisticRegressionContactHead(
             dim_pairwise = dim_pairwise
         )
+        # self.mrf_head = MRFHead(
+        #     dim_pairwise = dim_pairwise,
+        #     dim_alphabet = dim_logits
+        # )
 
     @property
     def device(self):
@@ -379,7 +385,8 @@ class MSAPairformer(Module):
             if (
                 any([os.path.basename(p) == "model_cuex.bin" for p in weights_files_l]) and 
                 any([os.path.basename(p) == "confind_contact.bin" for p in weights_files_l]) and
-                any([os.path.basename(p) == "contact.bin" for p in weights_files_l])
+                any([os.path.basename(p) == "contact.bin" for p in weights_files_l]) #and
+                # any([os.path.basename(p) == "mrf_head.bin" for p in weights_files_l])
             ):
                 main_weights_path = [p for p in weights_files_l if os.path.basename(p) == 'model_cuex.bin'][0]
                 checkpoint = torch.load(main_weights_path, weights_only=True, map_location=device)
@@ -387,14 +394,18 @@ class MSAPairformer(Module):
                 confind_contact_checkpoint = torch.load(confind_contact_path, weights_only=True, map_location=device)
                 cb_contact_path = [p for p in weights_files_l  if os.path.basename(p) == 'contact.bin'][0]
                 cb_contact_checkpoint = torch.load(cb_contact_path, weights_only=True, map_location=device)
+                mrf_head_path = [p for p in weights_files_l if os.path.basename(p) == 'mrf_head.bin'][0]
+                # mrf_head_checkpoint = torch.load(mrf_head_path, weights_only=True, map_location=device)
                 loaded = True
         if not loaded:
             path = Path(snapshot_download(repo_id="yakiyama/MSA-Pairformer", cache_dir=weights_dir))
             checkpoint = torch.load(path / "model_cuex.bin", weights_only=True, map_location=device)
             confind_contact_checkpoint = torch.load(path / "confind_contact.bin", weights_only=True, map_location=device)
             cb_contact_checkpoint = torch.load(path / "contact.bin", weights_only=True, map_location=device)
+            # mrf_head_checkpoint = torch.load(path / "mrf_head.bin", weights_only=True, map_location=device)
         checkpoint.update(confind_contact_checkpoint)
         checkpoint.update(cb_contact_checkpoint)
+        # checkpoint.update(mrf_head_checkpoint)
         model = cls()
         model.load_state_dict(checkpoint)
         model.to(device)
@@ -677,3 +688,60 @@ class MSAPairformer(Module):
             return_pairwise_repr_only = True
         )
         return results['final_pairwise_repr']
+
+    # def get_potts_model(
+    #     self,
+    #     msa: Float['b s n d'],
+    #     mask: Bool['b n'] | None = None,
+    #     msa_mask: Bool['b s'] | None = None,
+    #     full_mask: Bool['b s n'] | None = None,
+    #     pairwise_mask: Bool['b n n'] | None = None,
+    #     complex_chain_break_indices: List[int] | None = None,
+    # ):
+    #     # Initialize representations
+    #     msa, pairwise_repr = self.init_representations(msa, complex_chain_break_indices)
+    #     # Pass through layers
+    #     results = self.core_stack(
+    #         pairwise_repr = pairwise_repr,
+    #         msa = msa,
+    #         mask = mask,
+    #         msa_mask = msa_mask,
+    #         full_mask = full_mask,
+    #         pairwise_mask = pairwise_mask,
+    #         return_seq_weights = False,
+    #         return_pairwise_repr_layer_idx = [self.potts_layer_idx],
+    #         return_msa_repr_layer_idx = [self.potts_layer_idx],
+    #         query_only = False,
+    #         store_msa_repr_cpu = False,
+    #         store_pairwise_repr_cpu = False,
+    #         use_checkpointing_triangles = False,
+    #         return_repr_after_layer_idx = self.potts_layer_idx,
+    #     )
+    #     w, b = self.mrf_head(
+    #         results["pairwise_repr_d"][f"layer_{self.potts_layer_idx}"],
+    #         pairwise_mask,
+    #         mask,
+    #     )
+        # results = self.forward(
+        #     msa = msa,
+        #     mask = mask,
+        #     msa_mask = msa_mask,
+        #     full_mask = full_mask,
+        #     pairwise_mask = pairwise_mask,
+        #     return_seq_weights = False,
+        #     return_pairwise_repr_layer_idx = [self.potts_layer_idx],
+        #     return_msa_repr_layer_idx = [self.potts_layer_idx],
+        #     return_cb_contacts = False,
+        #     return_confind_contacts = False,
+        #     query_only = False,
+        #     store_msa_repr_cpu = False,
+        #     store_pairwise_repr_cpu = False,
+        #     use_checkpointing_triangles = False,
+        #     complex_chain_break_indices = complex_chain_break_indices,
+        # )
+        # w, b = self.mrf_head(
+        #     results['pairwise_repr_d'][f'layer_{self.potts_layer_idx}'],
+        #     pairwise_mask,
+        #     mask,
+        # )
+        return w, b
