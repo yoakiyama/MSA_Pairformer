@@ -1,17 +1,17 @@
 # Set LD_LIBRARY_PATH for cuequivariance_ops
 import os, ctypes
 from glob import glob
-append_ld_library_path = "~/.local/lib/python3.10/site-packages/nvidia/cublas/lib"
-LD_LIBRARY_PATH = os.environ.get("LD_LIBRARY_PATH", "")
-os.environ["LD_LIBRARY_PATH"] = f"{append_ld_library_path}:{LD_LIBRARY_PATH}" if LD_LIBRARY_PATH else append_ld_library_path
+# append_ld_library_path = "~/.local/lib/python3.10/site-packages/nvidia/cublas/lib"
+# LD_LIBRARY_PATH = os.environ.get("LD_LIBRARY_PATH", "")
+# os.environ["LD_LIBRARY_PATH"] = f"{append_ld_library_path}:{LD_LIBRARY_PATH}" if LD_LIBRARY_PATH else append_ld_library_path
 
-cublas_dir = "/home/ubuntu/.local/lib/python3.10/site-packages/nvidia/cublas/lib"
-for pat in ["libcublas.so*", "libcublasLt.so*", "libcudart.so*"]:
-    for lib in sorted(glob(os.path.join(cublas_dir, pat))):
-        try:
-            ctypes.CDLL(lib, mode=ctypes.RTLD_GLOBAL)
-        except OSError as e:
-            print(f"Warning: could not load {lib}: {e}")
+# cublas_dir = "/home/ubuntu/.local/lib/python3.10/site-packages/nvidia/cublas/lib"
+# for pat in ["libcublas.so*", "libcublasLt.so*", "libcudart.so*"]:
+#     for lib in sorted(glob(os.path.join(cublas_dir, pat))):
+#         try:
+#             ctypes.CDLL(lib, mode=ctypes.RTLD_GLOBAL)
+#         except OSError as e:
+#             print(f"Warning: could not load {lib}: {e}")
 
 import torch
 
@@ -104,7 +104,7 @@ def main():
                     msa_mask = msa_mask,
                     full_mask = full_mask,
                     pairwise_mask = pairwise_mask,
-                    complex_chain_break_indices = [[chain_break_idx]],
+                    complex_chain_break_indices = [[chain_break_idx]] * 4,
                     return_seq_weights = False,
                     return_cb_contacts = False,
                     return_confind_contacts = False
