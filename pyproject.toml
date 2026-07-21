@@ -46,3 +46,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["MSA_Pairformer"]
+
+[tool.hatch.build.targets.sdist]
+only-include = ["MSA_Pairformer", "README.md", "LICENSE", "MIT_LICENSE", "pyproject.toml"]
