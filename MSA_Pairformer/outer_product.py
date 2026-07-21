@@ -194,9 +194,10 @@ class PresoftmaxDifferentialOuterProductMean(Module):
             self.lambda_k2 = nn.Parameter(torch.zeros(self.dim_qk, dtype=torch.float32).normal_(mean=0,std=0.1))
         self.return_seq_weights = return_seq_weights
 
-    def _opm(self, a, b):
+    def _opm(self, a, b, pair_denom):
         outer = torch.einsum("...bac,...dae->...bdce", a, b)
         outer = outer.reshape(outer.shape[:-2] + (-1,))
+        outer = outer / (pair_denom.unsqueeze(-1) + self.eps)
         outer = self.to_pairwise_repr(outer)
         outer = self.activation(outer)
         return outer
@@ -289,14 +290,19 @@ class PresoftmaxDifferentialOuterProductMean(Module):
         scaled_seq_weights = (seq_weights + self.eps).sqrt()
         a = torch.einsum("...s,...nsc->...nsc", scaled_seq_weights, a) # [b n s c]
         b = torch.einsum("...s,...nsc->...nsc", scaled_seq_weights, b) # [b n s c]
+        # Readjust based on full mask
+        weighted_mask = seq_weights.unsqueeze(-1) * full_mask.float()
+        pair_denom = torch.einsum("bsi, bsj -> bij", weighted_mask, full_mask.float())
         if self.chunk_size is not None:
             outer = self._chunk(a, b, self.chunk_size)
         else:
-            outer = self._opm(a, b)
+            outer = self._opm(a, b, pair_denom)
         # Mask invalid pairwise positions
         if not exists(pairwise_mask):
             pairwise_mask = to_pairwise_mask(mask)
         outer = torch.einsum("... i j d, ... i j -> ... i j d", outer, pairwise_mask)
+        # outer = outer / (pair_denom.unsqueeze(-1) + self.eps)
+        # print(pair_denom)
         if not self.return_seq_weights:
             del seq_weights
             seq_weights = None

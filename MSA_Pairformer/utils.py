@@ -489,3 +489,165 @@ def get_top_L_pairs(predicted_contacts_a, minsep=24):
     cutoff = np.sort(vals)[::-1][L-1]
     vals_sort_idx = vals >= cutoff
     return filtered_i[vals_sort_idx], filtered_j[vals_sort_idx]
+
+def get_p_at_k(gt_contacts_a, pred_contacts_a, minsep=24, upper_triangle=True):
+    assert gt_contacts_a.shape == pred_contacts_a.shape, f"Size mismatch. Received predictions of size {pred_contacts_a.shape}, targets of size {gt_contacts_a.shape}"
+    # Subset for upper triangle if necessary (for monomer but not for hetero-oligomer)
+    if upper_triangle:
+        triu_idx = np.triu_indices_from(gt_contacts_a, 1)
+        mask = np.abs(triu_idx[0] - triu_idx[1]) >= minsep
+        filtered_i, filtered_j = triu_idx[0][mask], triu_idx[1][mask]
+    else:
+        filtered_i, filtered_j = np.indices(gt_contacts_a.shape)
+        filtered_i, filtered_j = filtered_i.flatten(), filtered_j.flatten()
+    gt_contact_labels = gt_contacts_a[filtered_i, filtered_j]
+    pred_contact_vals = pred_contacts_a[filtered_i, filtered_j]
+    
+    # Get total number of ground truth contacts
+    k = gt_contact_labels.sum()
+
+    # Sort predictions by descending order and take the top k
+    top_k_indices = np.argpartition(pred_contact_vals, -k)[-k:]
+    
+    p_at_k = (gt_contact_labels[top_k_indices] == 1).sum() / k
+    return p_at_k
+
+def get_p_at_l(gt_contacts_a, pred_contacts_a, minsep=24, upper_triangle=True):
+    assert gt_contacts_a.shape == pred_contacts_a.shape, f"Size mismatch. Received predictions of size {pred_contacts_a.shape}, targets of size {gt_contacts_a.shape}"
+    # Subset for upper triangle if necessary (for monomer but not for hetero-oligomer)
+    if upper_triangle:
+        triu_idx = np.triu_indices_from(gt_contacts_a, 1)
+        mask = np.abs(triu_idx[0] - triu_idx[1]) >= minsep
+        filtered_i, filtered_j = triu_idx[0][mask], triu_idx[1][mask]
+    else:
+        filtered_i, filtered_j = np.indices(gt_contacts_a.shape)
+        filtered_i, filtered_j = filtered_i.flatten(), filtered_j.flatten()
+    gt_contact_labels = gt_contacts_a[filtered_i, filtered_j]
+    pred_contact_vals = pred_contacts_a[filtered_i, filtered_j]
+    
+    # Get total number of ground truth contacts
+    k = gt_contacts_a.shape[0]
+
+    # Sort predictions by descending order and take the top k
+    top_k_indices = np.argpartition(pred_contact_vals, -k)[-k:]
+    
+    p_at_l = (gt_contact_labels[top_k_indices] == 1).sum() / k
+    return p_at_l
+
+
+def get_coords(structure_file_path, chain_id):
+    # Load coordinates
+    with open(structure_file_path, "r") as oFile:
+        cif_lines_l = [l for l in oFile.readlines() if 
+                       (l.startswith('ATOM') and (l.split()[4] == chain_id) and
+                        (((l.split()[2] == 'CA') and (l.split()[3]=='GLY')) or 
+                         ((l.split()[2]=='CB') and (l.split()[3] != 'GLY'))))]
+    coords_a = np.array([[float(xyz) for xyz in l.split()[6:9]] for l in cif_lines_l])
+    return coords_a
+
+def get_coords_cif(structure_file_path, chain_id):
+    """
+    Extract CA (GLY) / CB (all others) coordinates for a single chain from an mmCIF file.
+
+    Returns:
+        coords_a    : np.ndarray of shape (N, 3) — coordinates of CA/CB atoms
+        sequence    : str — full one-letter sequence of the chain (in residue order)
+        coord_indices: list[int] — indices into `sequence` for each row of coords_a
+    """
+    FIELDS = {
+        "_atom_site.group_PDB",
+        "_atom_site.label_atom_id",
+        "_atom_site.label_comp_id",
+        "_atom_site.label_asym_id",
+        "_atom_site.label_seq_id",   # residue sequence number
+        "_atom_site.Cartn_x",
+        "_atom_site.Cartn_y",
+        "_atom_site.Cartn_z",
+    }
+
+    THREE_TO_ONE = {
+        "ALA": "A", "ARG": "R", "ASN": "N", "ASP": "D", "CYS": "C",
+        "GLN": "Q", "GLU": "E", "GLY": "G", "HIS": "H", "ILE": "I",
+        "LEU": "L", "LYS": "K", "MET": "M", "PHE": "F", "PRO": "P",
+        "SER": "S", "THR": "T", "TRP": "W", "TYR": "Y", "VAL": "V",
+        "MSE": "M"
+    }
+
+    with open(structure_file_path, "r") as f:
+        lines = f.readlines()
+
+    # --- Parse _atom_site loop header ---
+    col_index = {}
+    in_atom_site_loop = False
+    col_counter = 0
+    atom_lines = []
+
+    for line in lines:
+        stripped = line.strip()
+        if stripped == "loop_":
+            in_atom_site_loop = False
+            col_counter = 0
+            col_index = {}
+            continue
+        if stripped.startswith("_atom_site."):
+            in_atom_site_loop = True
+            if stripped in FIELDS:
+                col_index[stripped] = col_counter
+            col_counter += 1
+            continue
+        if in_atom_site_loop and stripped and not stripped.startswith("_") and not stripped.startswith("#"):
+            atom_lines.append(stripped)
+        if stripped == "#" and atom_lines:
+            break
+
+    missing = FIELDS - set(col_index.keys())
+    if missing:
+        raise ValueError(f"CIF file missing expected _atom_site fields: {missing}")
+
+    i_group = col_index["_atom_site.group_PDB"]
+    i_atom  = col_index["_atom_site.label_atom_id"]
+    i_resn  = col_index["_atom_site.label_comp_id"]
+    i_chain = col_index["_atom_site.label_asym_id"]
+    i_seqid = col_index["_atom_site.label_seq_id"]
+    i_x     = col_index["_atom_site.Cartn_x"]
+    i_y     = col_index["_atom_site.Cartn_y"]
+    i_z     = col_index["_atom_site.Cartn_z"]
+
+    # --- First pass: collect all residues in order to build the full sequence ---
+    # Use an ordered dict keyed by seq_id to deduplicate (many atoms per residue)
+    residue_map = {}   # seq_id (int) -> three-letter code
+    for line in atom_lines:
+        cols = line.split()
+        if cols[i_group] != "ATOM" or cols[i_chain] != chain_id:
+            continue
+        seq_id = int(cols[i_seqid])
+        if seq_id not in residue_map:
+            residue_map[seq_id] = cols[i_resn]
+
+    # Sort by seq_id to ensure correct order, then build sequence + a seq_id -> position index
+    sorted_seq_ids = sorted(residue_map.keys())
+    sequence = "".join(THREE_TO_ONE.get(residue_map[s], "X") for s in sorted_seq_ids)
+    seqid_to_pos = {seq_id: pos for pos, seq_id in enumerate(sorted_seq_ids)}
+
+    # --- Second pass: extract CA/CB coordinates and their positions in the sequence ---
+    coords = []
+    coord_indices = []
+    seen_seqids = set()   # one coordinate per residue
+
+    for line in atom_lines:
+        cols = line.split()
+        if cols[i_group] != "ATOM" or cols[i_chain] != chain_id:
+            continue
+        atom_name = cols[i_atom]
+        resn      = cols[i_resn]
+        seq_id    = int(cols[i_seqid])
+        if not ((atom_name == "CA" and resn == "GLY") or
+                (atom_name == "CB" and resn != "GLY")):
+            continue
+        if seq_id in seen_seqids:   # guard against duplicate ATOM records
+            continue
+        seen_seqids.add(seq_id)
+        coords.append([float(cols[i_x]), float(cols[i_y]), float(cols[i_z])])
+        coord_indices.append(seqid_to_pos[seq_id])
+
+    return np.array(coords), sequence, coord_indices

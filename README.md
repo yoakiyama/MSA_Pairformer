@@ -56,7 +56,7 @@ def _setup_tools():
 
 ## MSA Pairformer <a name="MSA-Pairformer"></a>
 
-[MSA Pairformer](https://www.biorxiv.org/content/10.1101/2025.08.02.668173v1) extracts evolutionary signals most relevant to a query sequence from a set of aligned homologous sequences. In this repository, we provide training code and Google Colab notebooks to reproduce the results in the pre-print. We are excited to deliver this tool to the research community and to see all of its applications to real-world biological challenges.
+[MSA Pairformer](https://www.cell.com/cell/fulltext/S0092-8674(26)00749-X) is an MSA-based protein language model that can model the coevolution of interacting proteins. In this repository, we provide the model source code, a Google Colab notebook for quick experimentation, and notebooks and scripts to reproduce the results of our manuscript. We are excited to deliver this tool to the community and to see all of its applications as a tool to study and engineer biology.
 
 ### Getting started with MSA Pairformer <a name="getting-started"></a>
 The model's weights can be downloaded from Huggingface under [HuggingFace/yakiyama/MSA-Pairformer](https://huggingface.co/yakiyama/MSA-Pairformer/).
@@ -65,7 +65,7 @@ import torch
 import numpy as np
 from huggingface_hub import login
 from MSA_Pairformer.model import MSAPairformer
-from MSA_Pairformer.dataset import MSA, prepare_msa_masks
+from MSA_Pairformer.dataset import MSA, prepare_msa_masks, aa2tok_d
 
 # Use the GPU if available
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -119,7 +119,9 @@ with torch.no_grad():
             complex_chain_break_indices=[[chain_break_idx]],
             return_seq_weights=True,
             return_pairwise_repr_layer_idx=None,
-            return_msa_repr_layer_idx=None
+            return_msa_repr_layer_idx=None,
+            return_cb_contacts=True,
+            return_confind_contacts=True
         )
 # res is a dictionary with the following keys: final_msa_repr, final_pairwise_repr, msa_repr_d, pairwise_repr_d, seq_weights_list_d, predicted_cb_contacts, predicted_confind_contacts
 
@@ -158,16 +160,14 @@ MSA Pairformer code and model weights are released under a permissive, slightly 
 ## Citation <a name="citation"></a>
 If you use MSA Pairformer in your work, please use the following citation
 ```
-@article {Akiyama2025.08.02.668173,
-	author = {Akiyama, Yo and Zhang, Zhidian and Mirdita, Milot and Steinegger, Martin and Ovchinnikov, Sergey},
-	title = {Scaling down protein language modeling with MSA Pairformer},
-	elocation-id = {2025.08.02.668173},
-	year = {2025},
-	doi = {10.1101/2025.08.02.668173},
-	publisher = {Cold Spring Harbor Laboratory},
-	URL = {https://www.biorxiv.org/content/early/2025/08/03/2025.08.02.668173},
-	eprint = {https://www.biorxiv.org/content/early/2025/08/03/2025.08.02.668173.full.pdf},
-	journal = {bioRxiv}
+@article {Akiyama2026,
+	author = {Akiyama, Yo and Zhang, Zhidian and Tang, Olivia and Kim, Rachel Seongeun and Mirdita, Milot and Steinegger, Martin and Ovchinnikov, Sergey},
+	title = {Expanding the scope of protein language modeling to protein-protein interactions with MSA Pairformer},
+	year = {2026},
+	doi = {10.1016/j.cell.2026.06.029},
+	publisher = {Cell Press},
+	URL = {https://doi.org/10.1016/j.cell.2026.06.029},
+	journal = {Cell}
 }
 
 ```

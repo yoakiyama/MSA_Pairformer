@@ -39,6 +39,7 @@ class RelativePositionEncoding(Module):
         dim_input = (2*r_max + 2) + (2*r_max + 2) + 1 + (2*s_max + 2)
         self.out_embedder = LinearNoBias(dim_input, dim_out)
 
+    @torch._dynamo.disable
     def forward(
         self,
         batch_size: int, 
@@ -49,6 +50,7 @@ class RelativePositionEncoding(Module):
 
         # One-hot encode distances
         # bins will be single-offset distances
+        
         def onehot(x, bins):
             dist_from_bins = einx.subtract('... i, j -> ... i j', x, bins)
             indices = dist_from_bins.abs().min(dim = -1, keepdim=True).indices

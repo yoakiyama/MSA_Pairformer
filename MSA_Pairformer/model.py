@@ -2,17 +2,19 @@ import torch
 from torch.nn import Module, ModuleList, Sequential
 import numpy as np
 import einx
+import os
 from math import exp
 from functools import partial
 from einops.layers.torch import Rearrange
 from huggingface_hub import snapshot_download
 from pathlib import Path
 from typing import List
+from glob import glob
 
 from MSA_Pairformer.core import LinearNoBias, PreLayerNorm, Transition, exists
 from MSA_Pairformer.outer_product import OuterProduct
-from MSA_Pairformer.regression import LMHead, LogisticRegressionContactHead
-from MSA_Pairformer.pairwise_operations import MSAPairWeightedAveraging, PairwiseBlock
+from MSA_Pairformer.regression import LMHead, LogisticRegressionContactHead, MRFHead
+from MSA_Pairformer.pairwise_operations import MSAPairWeightedAveraging, PairwiseBlock, cuex_is_available
 from MSA_Pairformer.positional_encoding import RelativePositionEncoding
 from MSA_Pairformer.custom_typing import Float, Bool
 
@@ -51,7 +53,7 @@ class CoreModule(Module):
             tri_mult_dim_hidden = None, # Defaults to pair representation dimension
             use_triangle_updates = True,
             use_pair_updates = False # For ablation study
-        )
+        ),
     ):
         super().__init__()
 
@@ -150,7 +152,11 @@ class CoreModule(Module):
         return_pairwise_repr_layer_idx: List[int] | int | None = None,
         return_repr_after_layer_idx: int | None = None,
         return_seq_weights: bool = False,
-    ) -> Float['b s n dm']:
+        store_pairwise_repr_cpu: bool = True,
+        store_msa_repr_cpu: bool = True,
+        return_pairwise_repr_only: bool = False,
+        use_checkpointing_triangles: bool = False
+    ):
         # Track seq weights, pairwise representations, and MSA representations for specified layers
         # seq weights are tracked throughout all layers
         seq_weights_list_d = {}
@@ -173,12 +179,15 @@ class CoreModule(Module):
             pairwise_block
         ) in enumerate(self.layers):
             # Pair weighted averaging (with residual connection)
-            msa_residual = msa_pair_weighted_avg(msa = msa, pairwise_repr = pairwise_repr, mask = mask)
+            msa_residual = msa_pair_weighted_avg(msa = msa, pairwise_repr = pairwise_repr, mask = mask, full_mask = full_mask, pairwise_mask = pairwise_mask)
             msa = msa + msa_residual
+            del msa_residual
             msa = msa + msa_transition(msa)
             if layer_idx in return_msa_repr_layer_idx:
-                msa_repr_d[f"layer_{layer_idx}"] = msa[:, :1, :, :].cpu() if query_only else msa
-            del msa_residual
+                if store_msa_repr_cpu:
+                    msa_repr_d[f"layer_{layer_idx}"] = msa[:, :1, :, :].cpu() if query_only else msa.cpu()
+                else:
+                    msa_repr_d[f"layer_{layer_idx}"] = msa[:, :1, :, :] if query_only else msa
 
             # Compute outer product mean (with residual connection)
             curr_seq_weights = None
@@ -202,9 +211,12 @@ class CoreModule(Module):
                 seq_weights_list_d[f"layer_{layer_idx}"] = norm_weights.cpu()
 
             # Pairwise representation block
-            pairwise_repr = pairwise_block(pairwise_repr = pairwise_repr, mask = mask)
+            pairwise_repr = pairwise_block(pairwise_repr = pairwise_repr, pairwise_mask = pairwise_mask, use_checkpointing_triangles = use_checkpointing_triangles)
             if layer_idx in return_pairwise_repr_layer_idx:
-                pairwise_repr_d[f"layer_{layer_idx}"] = pairwise_repr.cpu()
+                if store_pairwise_repr_cpu:
+                    pairwise_repr_d[f"layer_{layer_idx}"] = pairwise_repr.cpu()
+                else:
+                    pairwise_repr_d[f"layer_{layer_idx}"] = pairwise_repr
 
             # Break out of loop early if we've reached the layer from which we want to compute the representations
             if (return_repr_after_layer_idx is not None) and (layer_idx == return_repr_after_layer_idx):
@@ -212,22 +224,35 @@ class CoreModule(Module):
         layer_idx += 1
 
         # Final MSA update
-        if (return_repr_after_layer_idx is None) or (layer_idx == return_repr_after_layer_idx):
+        if (return_repr_after_layer_idx is None) or (layer_idx == len(self.layers)):
             msa_residual = self.final_msa_pwa(
                 msa = msa,
                 pairwise_repr = pairwise_repr,
-                mask = mask
+                mask = mask,
+                full_mask = full_mask,
+                pairwise_mask = pairwise_mask
             )
             msa = msa + msa_residual
             del msa_residual
             msa = msa + self.final_msa_transition(msa)
             if layer_idx in return_msa_repr_layer_idx:
-                msa_repr_d[f"layer_{layer_idx+1}"] = msa[:, :1, :, :].cpu() if query_only else msa
+                if store_msa_repr_cpu:
+                    msa_repr_d[f"layer_{layer_idx}"] = msa[:, :1, :, :].cpu() if query_only else msa.cpu()
+                else:
+                    msa_repr_d[f"layer_{layer_idx}"] = msa[:, :1, :, :] if query_only else msa
         
         # Organize results
         res = {}
-        res['final_msa_repr'] = msa[:, :1, :, :].cpu() if query_only else msa
-        res['final_pairwise_repr'] = pairwise_repr.cpu()
+        # Return only pairwise representation
+        if return_pairwise_repr_only:
+            res['final_pairwise_repr'] = pairwise_repr if not store_pairwise_repr_cpu else pairwise_repr.cpu()
+            return res
+        # Return all
+        if store_msa_repr_cpu:
+            res['final_msa_repr'] = msa[:, :1, :, :] if query_only else msa.cpu()
+        else:
+            res['final_msa_repr'] = msa[:, :1, :, :] if query_only else msa
+        res['final_pairwise_repr'] = pairwise_repr if not store_pairwise_repr_cpu else pairwise_repr.cpu()
         res['msa_repr_d'] = msa_repr_d
         res['pairwise_repr_d'] = pairwise_repr_d
         res['seq_weights_list_d'] = seq_weights_list_d
@@ -285,13 +310,21 @@ class MSAPairformer(Module):
             s_max = 2,
         ),
         contact_layer: int = 15,
-        confind_contact_layer: int = 18
+        confind_contact_layer: int = 18,
+        potts_layer_idx: int = 15
     ):
         super().__init__()
         self.dim_pairwise = dim_pairwise
         self.dim_msa = dim_msa
         self.contact_layer = contact_layer
         self.confind_contact_layer = confind_contact_layer
+        self.potts_layer_idx = potts_layer_idx
+
+        # Check if cuEquivariance is available
+        if cuex_is_available():
+            print("Using cuEquivariance for triangle multiplicative update")
+        else:
+            print("cuEquivariance is not available. Using standard PyTorch implementation for triangle multiplicative update")
 
         # Relative position encoding
         self.relative_position_encoding = RelativePositionEncoding(
@@ -326,6 +359,10 @@ class MSAPairformer(Module):
         self.confind_contact_head = LogisticRegressionContactHead(
             dim_pairwise = dim_pairwise
         )
+        # self.mrf_head = MRFHead(
+        #     dim_pairwise = dim_pairwise,
+        #     dim_alphabet = dim_logits
+        # )
 
     @property
     def device(self):
@@ -341,12 +378,34 @@ class MSAPairformer(Module):
     ):
         if device is None:
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        path = Path(snapshot_download(repo_id="yakiyama/MSA-Pairformer", cache_dir=weights_dir))
-        checkpoint = torch.load(path / "model.bin", weights_only=True, map_location=device)
-        confind_contact_checkpoint = torch.load(path / "confind_contact.bin", weights_only=True, map_location=device)
-        cb_contact_checkpoint = torch.load(path / "contact.bin", weights_only=True, map_location=device)
+        loaded = False
+        if weights_dir is not None:
+            # If weights have already been saved
+            weights_files_l = glob(os.path.join(weights_dir, "*/snapshots/*/*"))
+            if (
+                any([os.path.basename(p) == "model_cuex.bin" for p in weights_files_l]) and 
+                any([os.path.basename(p) == "confind_contact.bin" for p in weights_files_l]) and
+                any([os.path.basename(p) == "contact.bin" for p in weights_files_l]) #and
+                # any([os.path.basename(p) == "mrf_head.bin" for p in weights_files_l])
+            ):
+                main_weights_path = [p for p in weights_files_l if os.path.basename(p) == 'model_cuex.bin'][0]
+                checkpoint = torch.load(main_weights_path, weights_only=True, map_location=device)
+                confind_contact_path = [p for p in weights_files_l if os.path.basename(p) == 'confind_contact.bin'][0]
+                confind_contact_checkpoint = torch.load(confind_contact_path, weights_only=True, map_location=device)
+                cb_contact_path = [p for p in weights_files_l  if os.path.basename(p) == 'contact.bin'][0]
+                cb_contact_checkpoint = torch.load(cb_contact_path, weights_only=True, map_location=device)
+                # mrf_head_path = [p for p in weights_files_l if os.path.basename(p) == 'mrf_head.bin'][0]
+                # mrf_head_checkpoint = torch.load(mrf_head_path, weights_only=True, map_location=device)
+                loaded = True
+        if not loaded:
+            path = Path(snapshot_download(repo_id="yakiyama/MSA-Pairformer", cache_dir=weights_dir))
+            checkpoint = torch.load(path / "model_cuex.bin", weights_only=True, map_location=device)
+            confind_contact_checkpoint = torch.load(path / "confind_contact.bin", weights_only=True, map_location=device)
+            cb_contact_checkpoint = torch.load(path / "contact.bin", weights_only=True, map_location=device)
+            # mrf_head_checkpoint = torch.load(path / "mrf_head.bin", weights_only=True, map_location=device)
         checkpoint.update(confind_contact_checkpoint)
         checkpoint.update(cb_contact_checkpoint)
+        # checkpoint.update(mrf_head_checkpoint)
         model = cls()
         model.load_state_dict(checkpoint)
         model.to(device)
@@ -393,28 +452,43 @@ class MSAPairformer(Module):
         pairwise_mask: Bool['b n n'] | None = None,
         seq_weights: Float['b s'] | None = None,
         seq_weights_dict: dict = {},
-        return_contacts: bool = True,
+        return_cb_contacts: bool = True,
+        return_confind_contacts: bool = True,
         return_seq_weights: bool = False,
         query_only: bool = True,
         return_pairwise_repr_layer_idx: List[int] | int | None = None,
         return_msa_repr_layer_idx: List[int] | int | None = None,
         complex_chain_break_indices: List[int] | None = None,
         return_repr_after_layer_idx: int | None = None,
+        store_msa_repr_cpu: bool = True,
+        store_pairwise_repr_cpu: bool = True,
+        use_checkpointing_triangles: bool = False
     ):
         # Ensure that contact layer is in return_pairwise_repr_layer_idx if returning contacts
-        if return_contacts:
+        if return_cb_contacts or return_confind_contacts:
             if return_pairwise_repr_layer_idx is None:
-                return_pairwise_repr_layer_idx = [self.contact_layer, self.confind_contact_layer]
+                return_pairwise_repr_layer_idx = []
+                if return_cb_contacts:
+                    return_pairwise_repr_layer_idx.append(self.contact_layer)
+                if return_confind_contacts:
+                    return_pairwise_repr_layer_idx.append(self.confind_contact_layer)
             elif isinstance(return_pairwise_repr_layer_idx, int):
-                return_pairwise_repr_layer_idx = [return_pairwise_repr_layer_idx, self.contact_layer, self.confind_contact_layer]
-            elif self.contact_layer not in return_pairwise_repr_layer_idx:
-                return_pairwise_repr_layer_idx.append(self.contact_layer)
-            if self.confind_contact_layer not in return_pairwise_repr_layer_idx:
-                return_pairwise_repr_layer_idx.append(self.confind_contact_layer)
+                return_pairwise_repr_layer_idx = [return_pairwise_repr_layer_idx]
+                if return_cb_contacts:
+                    return_pairwise_repr_layer_idx.append(self.contact_layer)
+                if return_confind_contacts:
+                    return_pairwise_repr_layer_idx.append(self.confind_contact_layer)
+            elif isinstance(return_pairwise_repr_layer_idx, list):
+                if return_cb_contacts and (self.contact_layer not in return_pairwise_repr_layer_idx):
+                    return_pairwise_repr_layer_idx.append(self.contact_layer)
+                if return_confind_contacts and (self.confind_contact_layer not in return_pairwise_repr_layer_idx):
+                    return_pairwise_repr_layer_idx.append(self.confind_contact_layer)
 
         # Initialize representations
         msa, pairwise_repr = self.init_representations(msa, complex_chain_break_indices)
         # Pass through layers
+        if return_cb_contacts or return_confind_contacts:
+            store_pairwise_repr_cpu = False
         results = self.core_stack(
             pairwise_repr = pairwise_repr,
             msa = msa,
@@ -428,21 +502,32 @@ class MSAPairformer(Module):
             return_seq_weights = return_seq_weights,
             return_msa_repr_layer_idx = return_msa_repr_layer_idx,
             return_pairwise_repr_layer_idx = return_pairwise_repr_layer_idx,
-            return_repr_after_layer_idx = return_repr_after_layer_idx
+            return_repr_after_layer_idx = return_repr_after_layer_idx,
+            store_pairwise_repr_cpu = store_pairwise_repr_cpu,
+            store_msa_repr_cpu = store_msa_repr_cpu,
+            use_checkpointing_triangles = use_checkpointing_triangles
         )
 
         # Get logits via language modeling head
-        if query_only:
+        if store_msa_repr_cpu:
             logits = self.lm_head(results['final_msa_repr'].to(self.device))
         else:
-            logits = self.lm_head(results['final_msa_repr'].to(self.device))
+            logits = self.lm_head(results['final_msa_repr'])
         results['logits'] = logits
 
-        # Predict contacts
-        if return_contacts:
-            contacts = self.contact_head(results['pairwise_repr_d'][f'layer_{self.contact_layer}'].to(self.device))
+        # Predict Cb-Cb contacts
+        if return_cb_contacts:
+            if store_pairwise_repr_cpu:
+                contacts = self.contact_head(results['pairwise_repr_d'][f'layer_{self.contact_layer}'].to(self.device))
+            else:
+                contacts = self.contact_head(results['pairwise_repr_d'][f'layer_{self.contact_layer}'])
             results['predicted_cb_contacts'] = contacts
-            confind_contacts = self.confind_contact_head(results['pairwise_repr_d'][f'layer_{self.confind_contact_layer}'].to(self.device))
+        # Predict ConFind contacts
+        if return_confind_contacts:
+            if store_pairwise_repr_cpu:
+                confind_contacts = self.confind_contact_head(results['pairwise_repr_d'][f'layer_{self.confind_contact_layer}'].to(self.device))
+            else:
+                confind_contacts = self.confind_contact_head(results['pairwise_repr_d'][f'layer_{self.confind_contact_layer}'])
             results['predicted_confind_contacts'] = confind_contacts
         return results
 
@@ -537,6 +622,7 @@ class MSAPairformer(Module):
         seq_weights_dict: dict = {},
         complex_chain_break_indices: List[int] | None = None,
         return_seq_weights: bool = False,
+        store_pairwise_repr_cpu: bool = False,
     ):
         # Initialize representations
         msa, pairwise_repr = self.init_representations(msa, complex_chain_break_indices)
@@ -554,6 +640,8 @@ class MSAPairformer(Module):
             return_repr_after_layer_idx = self.confind_contact_layer,
             return_pairwise_repr_layer_idx = [self.confind_contact_layer],
             return_seq_weights = return_seq_weights,
+            store_pairwise_repr_cpu = store_pairwise_repr_cpu,
+            store_msa_repr_cpu = False,
         )
 
         # Predict contacts
@@ -564,3 +652,96 @@ class MSAPairformer(Module):
             res['seq_weights_list_d'] = results['seq_weights_list_d']
 
         return res
+
+    def get_pairwise_repr_at_layer(
+        self,
+        msa: Float['b s n d'],
+        return_repr_after_layer_idx: int,
+        mask: Bool['b n'] | None = None,
+        msa_mask: Bool['b s'] | None = None,
+        full_mask: Bool['b s n'] | None = None,
+        pairwise_mask: Bool['b n n'] | None = None,
+        seq_weights: Float['b s'] | None = None,
+        seq_weights_dict: dict = {},
+        complex_chain_break_indices: List[int] | None = None,
+        store_pairwise_repr_cpu: bool = False
+    ):
+        # Initialize representations
+        msa, pairwise_repr = self.init_representations(msa, complex_chain_break_indices)
+        # Pass through layers
+        results = self.core_stack(
+            msa = msa,
+            pairwise_repr = pairwise_repr,
+            mask = mask,
+            msa_mask = msa_mask,
+            full_mask = full_mask,
+            pairwise_mask = pairwise_mask,
+            seq_weights = seq_weights,
+            seq_weights_dict = seq_weights_dict,
+            query_only = True,
+            return_seq_weights = False,
+            return_msa_repr_layer_idx = None,
+            return_pairwise_repr_layer_idx = None,
+            return_repr_after_layer_idx = return_repr_after_layer_idx,
+            store_pairwise_repr_cpu = store_pairwise_repr_cpu,
+            store_msa_repr_cpu = False,
+            return_pairwise_repr_only = True
+        )
+        return results['final_pairwise_repr']
+
+    # def get_potts_model(
+    #     self,
+    #     msa: Float['b s n d'],
+    #     mask: Bool['b n'] | None = None,
+    #     msa_mask: Bool['b s'] | None = None,
+    #     full_mask: Bool['b s n'] | None = None,
+    #     pairwise_mask: Bool['b n n'] | None = None,
+    #     complex_chain_break_indices: List[int] | None = None,
+    # ):
+    #     # Initialize representations
+    #     msa, pairwise_repr = self.init_representations(msa, complex_chain_break_indices)
+    #     # Pass through layers
+    #     results = self.core_stack(
+    #         pairwise_repr = pairwise_repr,
+    #         msa = msa,
+    #         mask = mask,
+    #         msa_mask = msa_mask,
+    #         full_mask = full_mask,
+    #         pairwise_mask = pairwise_mask,
+    #         return_seq_weights = False,
+    #         return_pairwise_repr_layer_idx = [self.potts_layer_idx],
+    #         return_msa_repr_layer_idx = [self.potts_layer_idx],
+    #         query_only = False,
+    #         store_msa_repr_cpu = False,
+    #         store_pairwise_repr_cpu = False,
+    #         use_checkpointing_triangles = False,
+    #         return_repr_after_layer_idx = self.potts_layer_idx,
+    #     )
+    #     w, b = self.mrf_head(
+    #         results["pairwise_repr_d"][f"layer_{self.potts_layer_idx}"],
+    #         pairwise_mask,
+    #         mask,
+    #     )
+        # results = self.forward(
+        #     msa = msa,
+        #     mask = mask,
+        #     msa_mask = msa_mask,
+        #     full_mask = full_mask,
+        #     pairwise_mask = pairwise_mask,
+        #     return_seq_weights = False,
+        #     return_pairwise_repr_layer_idx = [self.potts_layer_idx],
+        #     return_msa_repr_layer_idx = [self.potts_layer_idx],
+        #     return_cb_contacts = False,
+        #     return_confind_contacts = False,
+        #     query_only = False,
+        #     store_msa_repr_cpu = False,
+        #     store_pairwise_repr_cpu = False,
+        #     use_checkpointing_triangles = False,
+        #     complex_chain_break_indices = complex_chain_break_indices,
+        # )
+        # w, b = self.mrf_head(
+        #     results['pairwise_repr_d'][f'layer_{self.potts_layer_idx}'],
+        #     pairwise_mask,
+        #     mask,
+        # )
+        return w, b
