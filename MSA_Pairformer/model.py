@@ -219,7 +219,7 @@ class CoreModule(Module):
                     pairwise_repr_d[f"layer_{layer_idx}"] = pairwise_repr
 
             # Break out of loop early if we've reached the layer from which we want to compute the representations
-            if (return_repr_after_layer_idx is not None) and (layer_idx == len(self.layers)):
+            if (return_repr_after_layer_idx is not None) and (layer_idx == return_repr_after_layer_idx):
                 break
         layer_idx += 1
 
@@ -394,7 +394,7 @@ class MSAPairformer(Module):
                 confind_contact_checkpoint = torch.load(confind_contact_path, weights_only=True, map_location=device)
                 cb_contact_path = [p for p in weights_files_l  if os.path.basename(p) == 'contact.bin'][0]
                 cb_contact_checkpoint = torch.load(cb_contact_path, weights_only=True, map_location=device)
-                mrf_head_path = [p for p in weights_files_l if os.path.basename(p) == 'mrf_head.bin'][0]
+                # mrf_head_path = [p for p in weights_files_l if os.path.basename(p) == 'mrf_head.bin'][0]
                 # mrf_head_checkpoint = torch.load(mrf_head_path, weights_only=True, map_location=device)
                 loaded = True
         if not loaded:

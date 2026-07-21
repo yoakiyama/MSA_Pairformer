@@ -314,13 +314,13 @@ class PairMultiplication(Module):
     ) -> Float["b n n d"]:
 
         # Get mask
+        assert exists(pairwise_mask), "pairwise_mask must be provided to PairMultiplication"
         pairwise_mask = rearrange(pairwise_mask, '... -> ... 1')
 
         # Compute a and b (line 2)
         left, right = self.left_right_proj(x).chunk(2, dim = -1) # b n n c
-        if exists(pairwise_mask):
-            left = left * pairwise_mask
-            right = right * pairwise_mask
+        left = left * pairwise_mask
+        right = right * pairwise_mask
 
         # Pair update just updates node ij by combining information from ij and ji and LayerNorm
         out = left * right.transpose(1, 2)
