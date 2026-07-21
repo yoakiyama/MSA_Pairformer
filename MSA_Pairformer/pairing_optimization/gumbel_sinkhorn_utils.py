@@ -1,4 +1,5 @@
 # Adapted from https://github.com/Bitbol-Lab/DiffPALM/blob/main/diffpalm/gumbel_sinkhorn_utils.py
+# Original author: Umberto Lupo et al. (2024), Pairing interacting protein sequences using masked language modeling
 # Modified from: https://github.com/perrying/gumbel-sinkhorn
 
 import numpy as np

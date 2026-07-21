@@ -1,3 +1,6 @@
+# Adapted from https://github.com/Bitbol-Lab/DiffPALM/blob/main/diffpalm/msa_parsing.py
+# Original author: Umberto Lupo et al. (2024), Pairing interacting protein sequences using masked language modeling
+
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
