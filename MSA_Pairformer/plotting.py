@@ -104,6 +104,7 @@ def eval_hetero_oligomer(
     chain_break_pos,
     L=1,
     monomer_minsep=24,
+    interface_minsep=0,
     cutoffs=[None],
     ss=[5],
     cc=['gray'],
@@ -149,7 +150,7 @@ def eval_hetero_oligomer(
             elif (i == 0) and not monomer_p_at_k:
                 monomer_top_d[chain_idx] = sub_con.shape[0] * L
             if cutoff is None:
-                top = monomer_top_d[chain_idx]
+                top = int(monomer_top_d[chain_idx])
                 if len(vals) > top:  # Make sure we have enough values
                     use_cutoff = np.sort(vals)[::-1][top]
                 else:
@@ -195,9 +196,12 @@ def eval_hetero_oligomer(
             continue
         filtered_i, filtered_j = np.indices(sub_con.shape)
         filtered_i, filtered_j = filtered_i.flatten(), filtered_j.flatten()
+        # Exclude interface pairs that are sequence-adjacent across the chain break
+        interface_mask = ((filtered_i + chain_break_pos) - filtered_j) >= interface_minsep
+        filtered_i, filtered_j = filtered_i[interface_mask], filtered_j[interface_mask]
         vals = sub_con[filtered_i, filtered_j]
         if cutoff is None:
-            hetero_top = total_interface_contacts
+            hetero_top = int(total_interface_contacts)
             if len(vals) > hetero_top:
                 use_cutoff = np.sort(vals)[::-1][hetero_top]
             else:
